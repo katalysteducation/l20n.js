@@ -4,10 +4,12 @@
     <title data-l10n-id="title"></title>
 
     <meta name="defaultLanguage" content="en-US">
-    <meta name="availableLanguages" content="en-US, fr">
+    <meta name="availableLanguages" content="en-US, pl">
     <link rel="localization" href="locales/example.{locale}.ftl">
     <link rel="localization" name="extra" href="locales/extra.{locale}.ftl">
-    <script defer src="../dist/bundle/web/l20n.js"></script>
+    <script defer src="../node_modules/babel-polyfill/browser.js"></script>
+    <script defer src="../dist/compat/web/Template.js"></script>
+    <script defer src="../dist/compat/web/l20n.js"></script>
   </head>
 
   <body>
