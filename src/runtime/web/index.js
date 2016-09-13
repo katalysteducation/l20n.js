@@ -1,6 +1,6 @@
 import './polyfill';
 import '../../intl/polyfill';
-import { prioritizeLocales } from '../../intl/locale';
+import { prioritizeLocales, PrioritizeLocales } from '../../intl/locale';
 
 import { ContentLocalizationObserver } from '../../lib/observer/content';
 import { HTMLLocalization } from '../../lib/dom/html';
@@ -25,7 +25,10 @@ documentReady().then(() => {
 });
 
 function createLocalization(name, resIds, defaultLang, availableLangs) {
-  function requestBundles(requestedLangs = new Set(navigator.languages)) {
+  const langs = PrioritizeLocales(availableLangs,navigator.languages.slice(),
+  defaultLang);
+
+  function requestBundles(requestedLangs = new Set(langs)) {
     const newLangs = prioritizeLocales(
       defaultLang, availableLangs, requestedLangs
     );
