@@ -6,11 +6,105 @@ translations.
 
 l20n.js for HTML will create an instance of `Localization` for the default set 
 of `<link rel="localization">` elements.  You can get a reference to it via:
+<<<<<<< Updated upstream
+=======
+
+<<<<<<< HEAD
+The `ContentLocalizationObserver` is an extension of a `LocalizationObserver`
+class which is used for all Web content.
+
+This class is used for all HTML content translations.
+
+# ChromeLocalizationObserver
+
+**Extends LocalizationObserver**
+
+The `ChromeLocalizationObserver` is an extension of a `LocalizationObserver`
+class which additionally collects all XBL binding nodes for translation.
+
+This API is useful for chrome-privileged HTML and XUL in Gecko.
+
+# XULLocalization
+
+**Extends Localization**
+
+The XUL-specific Localization class.
+
+# LocalizationObserver
+
+The `LocalizationObserver` class is responsible for localizing DOM trees.
+It also implements the iterable protocol which allows iterating over and
+retrieving available `Localization` objects.
+
+Each `document` will have its corresponding `LocalizationObserver` instance
+created automatically on startup, as `document.l10n`.
+
+## constructor
+
+Returns **[LocalizationObserver](#localizationobserver)** 
+
+## has
+
+Test if the `Localization` object with a given name already exists.
+
+```javascript
+if (document.l10n.has('extra')) {
+  const extraLocalization = document.l10n.get('extra');
+}
+```
+
+**Parameters**
+
+-   `name` **[string](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String)** key for the object
+
+Returns **[boolean](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Boolean)** 
+
+## get
+
+Retrieve a reference to the `Localization` object by name.
+
+```javascript
+const mainLocalization = document.l10n.get('main');
+const extraLocalization = document.l10n.get('extra');
+```
+
+**Parameters**
+
+-   `name` **[string](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String)** key for the object
+
+Returns **[Localization](#localization)** 
+
+## set
+
+Sets a reference to the `Localization` object by name.
+>>>>>>> Stashed changes
 
 ```javascript
 const localization = document.l10n.get('main');
 ```
 
+Different names can be specified via the `name` attribute on the `<link>` 
+elements.
+
+
+### Localization.interactive
+
+A Promise which resolves when the `Localization` instance has fetched and 
+parsed all localization resources in the user's first preferred language (if 
+available).
+
+```javascript
+localization.interactive.then(callback);
+```
+=======
+```javascript
+const localization = document.l10n.get('main');
+```
+
+<<<<<<< Updated upstream
+
+### Localization.formatValue(id, args)
+=======
 Different names can be specified via the `name` attribute on the `<link>` 
 elements.
 
@@ -46,12 +140,47 @@ when the user changes their language preferences.
 
 
 ### Localization.formatValues(...keys)
+>>>>>>> parent of 95d06e8... Marge with master of the l20n
 
 A generalized version of `Localization.formatValue`.  Retrieve translations 
 corresponding to the passed keys.  Keys can either be simple string identifiers 
 or `[id, args]` arrays.
 
+<<<<<<< HEAD
+-   `requestedLangs` **[Array](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array)&lt;[string](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String)>** array of requested languages
+>>>>>>> Stashed changes
+
+Retrieve the translation corresponding to the `id` identifier.
+
+If passed, `args` is a simple hash object with a list of variables that will be 
+interpolated in the value of the translation.
+
+Returns a Promise resolving to the translation string.
+
+```javascript
+localization.formatValue('hello', { who: 'world' }).then(
+  hello => console.log(hello));
+// -> 'Hello, world!'
+```
+
+Use this sparingly for one-off messages which don't need to be retranslated 
+when the user changes their language preferences.
+
+
+### Localization.formatValues(...keys)
+
+A generalized version of `Localization.formatValue`.  Retrieve translations 
+corresponding to the passed keys.  Keys can either be simple string identifiers 
+or `[id, args]` arrays.
+
+<<<<<<< Updated upstream
 Returns a Promise resolving to an array of the translation strings.
+=======
+Get the `data-l10n-*` attributes from DOM elements.
+=======
+Returns a Promise resolving to an array of the translation strings.
+>>>>>>> parent of 95d06e8... Marge with master of the l20n
+>>>>>>> Stashed changes
 
 ```javascript
 document.l10n.formatValues(
@@ -62,3 +191,212 @@ document.l10n.formatValues(
   console.log(helloMary, helloJohn, welcome));
 // -> 'Hello, Mary!', 'Hello, John!', 'Welcome!'
 ```
+<<<<<<< Updated upstream
+=======
+<<<<<<< HEAD
+
+**Parameters**
+
+-   `element` **[Element](https://developer.mozilla.org/en-US/docs/Web/API/Element)** HTML element
+
+Returns **{id: [string](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String), args: [Object](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object)}** 
+
+## observeRoot
+
+Add a new root to the list of observed ones.
+
+**Parameters**
+
+-   `root` **[Element](https://developer.mozilla.org/en-US/docs/Web/API/Element)** Root to observe.
+-   `l10n` **\[[Localization](#localization)](default this.get('main'))** `Localization` object
+
+## disconnectRoot
+
+Remove a root from the list of observed ones.
+If the root is the last to be associated with a given `Localization` object
+the `Localization` object association will also be removed.
+
+Returns `true` if the root was the last one associated with at least
+one `Localization` object.
+
+**Parameters**
+
+-   `root` **[Element](https://developer.mozilla.org/en-US/docs/Web/API/Element)** Root to disconnect.
+
+Returns **[boolean](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Boolean)** 
+
+## pause
+
+Pauses the `MutationObserver`
+
+## resume
+
+Resumes the `MutationObserver`
+
+## translateAllRoots
+
+Triggers translation of all roots associated with the
+`LocalizationObserver`.
+
+Returns a `Promise` which is resolved once all translations are
+completed.
+
+Returns **[Promise](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise)** 
+
+## translateFragment
+
+Translate a DOM node or fragment asynchronously.
+
+You can manually trigger translation (or re-translation) of a DOM fragment
+with `translateFragment`.  Use the `data-l10n-id` and `data-l10n-args`
+attributes to mark up the DOM with information about which translations to
+use.
+
+Returns a `Promise` that gets resolved once the translation is complete.
+
+**Parameters**
+
+-   `frag` **DOMFragment** DOMFragment to be translated
+
+Returns **[Promise](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise)** 
+
+## translateElement
+
+Translates a single DOM node asynchronously.
+
+Returns a `Promise` that gets resolved once the translation is complete.
+
+**Parameters**
+
+-   `element` **[Element](https://developer.mozilla.org/en-US/docs/Web/API/Element)** HTML element to be translated
+
+Returns **[Promise](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise)** 
+
+# Localization
+
+The `Localization` class is responsible for fetching resources and
+formatting translations.
+
+It implements the fallback strategy in case of errors encountered during the
+formatting of translations.
+
+In HTML and XUL, l20n.js will create an instance of `Localization` for the
+default set of `<link rel="localization">` elements.  You can get
+a reference to it via:
+
+    const localization = document.l10n.get('main');
+
+Different names can be specified via the `name` attribute on the `<link>`
+elements.  One `document` can have more than one `Localization` instance,
+but one `Localization` instance can only be assigned to a single `document`.
+
+`HTMLLocalization` and `XULLocalization` extend `Localization` and provide
+`document`-specific methods for sanitizing translations containing markup
+before they're inserted into the DOM.
+
+## constructor
+
+Create an instance of the `Localization` class.
+
+The instance's configuration is provided by two runtime-dependent
+functions passed to the constructor.
+
+The `requestBundles` function takes an array of language codes and returns
+a Promise of an array of lazy `ResourceBundle` instances.  The
+`Localization` instance will imediately call the `fetch` method of the
+first bundle returned by `requestBundles` and may call `fetch` on
+subsequent bundles in fallback scenarios.
+
+The array of bundles is the de-facto current fallback chain of languages
+and fetch locations.
+
+The `createContext` function takes a language code and returns an instance
+of `Intl.MessageContext`.  Since it's also provided to the constructor by
+the runtime it may pass runtime-specific `functions` to the
+`MessageContext` instances it creates.
+
+**Parameters**
+
+-   `requestBundles` **[Function](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/function)** 
+-   `createContext` **[Function](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/function)** 
+
+Returns **[Localization](#localization)** 
+
+## requestLanguages
+
+Initiate the change of the currently negotiated languages.
+
+`requestLanguages` takes an array of language codes representing user's
+updated language preferences.
+
+**Parameters**
+
+-   `requestedLangs` **[Array](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array)&lt;[string](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String)>** 
+
+Returns **[Promise](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise)&lt;[Array](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array)&lt;ResourceBundle>>** 
+
+## formatValues
+
+Retrieve translations corresponding to the passed keys.
+
+A generalized version of `Localization.formatValue`.  Keys can either be
+simple string identifiers or `[id, args]` arrays.
+
+    document.l10n.formatValues(
+      ['hello', { who: 'Mary' }],
+      ['hello', { who: 'John' }],
+      'welcome'
+    ).then(console.log);
+
+    // ['Hello, Mary!', 'Hello, John!', 'Welcome!']
+
+Returns a Promise resolving to an array of the translation strings.
+
+**Parameters**
+
+-   `keys` **...([Array](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array) \| [string](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String))** 
+
+Returns **[Promise](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise)&lt;[Array](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array)&lt;[string](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String)>>** 
+
+## formatValue
+
+Retrieve the translation corresponding to the `id` identifier.
+
+If passed, `args` is a simple hash object with a list of variables that
+will be interpolated in the value of the translation.
+
+    localization.formatValue(
+      'hello', { who: 'world' }
+    ).then(console.log);
+
+    // 'Hello, world!'
+
+Returns a Promise resolving to the translation string.
+
+Use this sparingly for one-off messages which don't need to be
+retranslated when the user changes their language preferences, e.g. in
+notifications.
+
+**Parameters**
+
+-   `id` **[string](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String)** Identifier of the translation to format
+-   `args` **\[[Object](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object)]** Optional external arguments
+
+Returns **[Promise](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise)&lt;[string](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String)>** 
+
+# HTMLLocalization
+
+**Extends Localization**
+
+The HTML-specific Localization class.
+
+# interactive
+
+A Promise which resolves when the `Localization` instance has fetched
+and parsed all localization resources in the user's first preferred
+language (if available).
+
+    localization.interactive.then(callback);
+=======
+>>>>>>> parent of 95d06e8... Marge with master of the l20n
+>>>>>>> Stashed changes
