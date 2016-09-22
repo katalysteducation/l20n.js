@@ -4,9 +4,6 @@ import { keysFromContext, valueFromContext, entityFromContext }
 export const properties = new WeakMap();
 export const contexts = new WeakMap();
 
-<<<<<<< Updated upstream
-=======
-<<<<<<< HEAD
 /**
  * The `Localization` class is responsible for fetching resources and
  * formatting translations.
@@ -28,18 +25,40 @@ export const contexts = new WeakMap();
  * `document`-specific methods for sanitizing translations containing markup
  * before they're inserted into the DOM.
  */
->>>>>>> Stashed changes
 export class Localization {
-  constructor(requestBundles, createContext) {
-    this.interactive = requestBundles().then(
-      bundles => fetchFirstBundle(bundles, createContext)
-    );
 
+  /**
+   * Create an instance of the `Localization` class.
+   *
+   * The instance's configuration is provided by two runtime-dependent
+   * functions passed to the constructor.
+   *
+   * The `requestBundles` function takes an array of language codes and returns
+   * a Promise of an array of lazy `ResourceBundle` instances.  The
+   * `Localization` instance will imediately call the `fetch` method of the
+   * first bundle returned by `requestBundles` and may call `fetch` on
+   * subsequent bundles in fallback scenarios.
+   *
+   * The array of bundles is the de-facto current fallback chain of languages
+   * and fetch locations.
+   *
+   * The `createContext` function takes a language code and returns an instance
+   * of `Intl.MessageContext`.  Since it's also provided to the constructor by
+   * the runtime it may pass runtime-specific `functions` to the
+   * `MessageContext` instances it creates.
+   *
+   * @param   {Function}     requestBundles
+   * @param   {Function}     createContext
+   * @returns {Localization}
+   */
+  constructor(requestBundles, createContext) {
+    const createHeadContext =
+      bundles => createHeadContextWith(createContext, bundles);
+
+    // Keep `requestBundles` and `createHeadContext` private.
     properties.set(this, {
-      requestBundles, createContext
+      requestBundles, createHeadContext
     });
-<<<<<<< Updated upstream
-=======
 
     /**
      * A Promise which resolves when the `Localization` instance has fetched
@@ -48,10 +67,6 @@ export class Localization {
      *
      *     localization.interactive.then(callback);
      */
-=======
-export class Localization {
-  constructor(requestBundles, createContext) {
->>>>>>> parent of 95d06e8... Marge with master of the l20n
     this.interactive = requestBundles().then(
       // Create a `MessageContext` for the first bundle right away.
       bundles => createHeadContext(bundles).then(
@@ -59,53 +74,128 @@ export class Localization {
         () => bundles
       )
     );
->>>>>>> Stashed changes
   }
 
+  /**
+   * Initiate the change of the currently negotiated languages.
+   *
+   * `requestLanguages` takes an array of language codes representing user's
+   * updated language preferences.
+   *
+   * @param   {Array<string>}     requestedLangs
+   * @returns {Promise<Array<ResourceBundle>>}
+   */
   requestLanguages(requestedLangs) {
-    return this.interactive.then(
-      bundles => changeLanguages(this, bundles, requestedLangs)
-    );
+    const { requestBundles, createHeadContext } = properties.get(this);
+
+    // Assign to `this.interactive` to make all translations requested after
+    // the language change request come from the new fallback chain.
+    return this.interactive = Promise.all(
+      // Get the current bundles to be able to compare them to the new result
+      // of the language negotiation.
+      [this.interactive, requestBundles(requestedLangs)]
+    ).then(([oldBundles, newBundles]) => {
+      if (equal(oldBundles, newBundles)) {
+        return oldBundles;
+      }
+
+      return createHeadContext(newBundles).then(
+        () => newBundles
+      )
+    });
   }
 
-  formatWithFallback(bundles, keys, method, prev) {
-    const ctx = contexts.get(bundles[0]);
-
+  /**
+   * Format translations and handle fallback if needed.
+   *
+   * Format translations for `keys` from `MessageContext` instances
+   * corresponding to the current bundles.  In case of errors, fetch the next
+   * bundle in the fallback chain, create a context for it, and recursively
+   * call `formatWithFallback` again.
+   *
+   * @param   {Array<ResourceBundle>} bundles - Current bundles.
+   * @param   {Array<Array>}          keys    - Translation keys to format.
+   * @param   {Function}              method  - Formatting function.
+   * @param   {Array<string>}         [prev]  - Previous translations.
+   * @returns {Array<string> | Promise<Array<string>>}
+   * @private
+   */
+  formatWithFallback(bundles, ctx, keys, method, prev) {
+    // If a context for the head bundle doesn't exist we've reached the last
+    // bundle in the fallback chain.  This is the end condition which returns
+    // the translations formatted during the previous (recursive) calls to
+    // `formatWithFallback`.
     if (!ctx && prev) {
       return prev.translations;
     }
 
     const current = keysFromContext(ctx, keys, method, prev);
 
+    // `hasErrors` is a flag set by `keysFromContext` to notify about errors
+    // during the formatting.  We can't just check the `length` of the `errors`
+    // property because it is fixed and equal to the length of `keys`.
     if (!current.hasErrors) {
       return current.translations;
     }
 
+    // In Gecko `console` needs to imported explicitly.
     if (typeof console !== 'undefined') {
+      // The `errors` property is an array of arrays, each containing all
+      // errors encountered for the translation at the same position in `keys`.
+      // If there were no errors for a given translation, `errors` will contain
+      // an `undefined` instead of the array of errors.  Most translations are
+      // simple string which don't produce errors.
       current.errors.forEach(
-        errs => errs.forEach(
+        errs => errs ? errs.forEach(
           e => console.warn(e) // eslint-disable-line no-console
-        )
+        ) : null
       );
     }
 
-    const { createContext } = properties.get(this);
-    return fetchFirstBundle(bundles.slice(1), createContext).then(
-      tailBundles => this.formatWithFallback(
-        tailBundles, keys, method, current
+    // At this point we need to fetch the next bundle in the fallback chain and
+    // create a `MessageContext` instance for it.
+    const tailBundles = bundles.slice(1);
+    const { createHeadContext } = properties.get(this);
+
+    return createHeadContext(tailBundles).then(
+      next => this.formatWithFallback(
+        tailBundles, next, keys, method, current
       )
     );
   }
 
+  /**
+   * Format translations into {value, attrs} objects.
+   *
+   * This is an internal method used by `LocalizationObserver` instances.  The
+   * fallback logic is the same as in `formatValues` but the argument type is
+   * stricter (an array of arrays) and it returns {value, attrs} objects which
+   * are suitable for the translation of DOM elements.
+   *
+   *     document.l10n.formatEntities([j
+   *       ['hello', { who: 'Mary' }],
+   *       ['welcome', undefined]
+   *     ]).then(console.log);
+   *
+   *     // [
+   *     //   { value: 'Hello, Mary!', attrs: null },
+   *     //   { value: 'Welcome!', attrs: { title: 'Hello' } }
+   *     // ]
+   *
+   * Returns a Promise resolving to an array of the translation strings.
+   *
+   * @param   {Array<Array>} keys
+   * @returns {Promise<Array<{value: string, attrs: Object}>>}
+   * @private
+   */
   formatEntities(keys) {
     return this.interactive.then(
-      bundles => this.formatWithFallback(bundles, keys, entityFromContext)
+      bundles => this.formatWithFallback(
+        bundles, contexts.get(bundles[0]), keys, entityFromContext
+      )
     );
   }
 
-<<<<<<< Updated upstream
-=======
-<<<<<<< HEAD
   /**
    * Retrieve translations corresponding to the passed keys.
    *
@@ -125,21 +215,18 @@ export class Localization {
    * @param   {...(Array | string)} keys
    * @returns {Promise<Array<string>>}
    */
-=======
->>>>>>> parent of 95d06e8... Marge with master of the l20n
->>>>>>> Stashed changes
   formatValues(...keys) {
+    // Convert string keys into arrays that `formatWithFallback` expects.
     const keyTuples = keys.map(
       key => Array.isArray(key) ? key : [key, null]
     );
     return this.interactive.then(
-      bundles => this.formatWithFallback(bundles, keyTuples, valueFromContext)
+      bundles => this.formatWithFallback(
+        bundles, contexts.get(bundles[0]), keyTuples, valueFromContext
+      )
     );
   }
 
-<<<<<<< Updated upstream
-=======
-<<<<<<< HEAD
   /**
    * Retrieve the translation corresponding to the `id` identifier.
    *
@@ -162,9 +249,6 @@ export class Localization {
    * @param   {Object}  [args] - Optional external arguments
    * @returns {Promise<string>}
    */
-=======
->>>>>>> parent of 95d06e8... Marge with master of the l20n
->>>>>>> Stashed changes
   formatValue(id, args) {
     return this.formatValues([id, args]).then(
       ([val]) => val
@@ -173,38 +257,44 @@ export class Localization {
 
 }
 
-function createContextFromBundle(bundle, createContext) {
+/**
+ * Create a `MessageContext` for the first bundle in the fallback chain.
+ *
+ * Fetches the bundle's resources and creates a context from them.
+ *
+ * @param   {Array<ResourceBundle>} bundle
+ * @param   {Function}              createContext
+ * @returns {Promise<MessageContext>}
+ * @private
+ */
+function createHeadContextWith(createContext, bundles) {
+  const [bundle] = bundles;
+
+  if (!bundle) {
+    return Promise.resolve(null);
+  }
+
   return bundle.fetch().then(resources => {
     const ctx = createContext(bundle.lang);
     resources
+      // Filter out resources which failed to load correctly (e.g. 404).
       .filter(res => res !== null)
       .forEach(res => ctx.addMessages(res));
+    // Save the reference to the context.
     contexts.set(bundle, ctx);
     return ctx;
   });
 }
 
-export function fetchFirstBundle(bundles, createContext) {
-  const [bundle] = bundles;
-
-  if (!bundle) {
-    return Promise.resolve(bundles);
-  }
-
-  return createContextFromBundle(bundle, createContext).then(
-    () => bundles
-  );
-}
-
-function changeLanguages(l10n, oldBundles, requestedLangs) {
-  const { requestBundles, createContext } = properties.get(l10n);
-
-  return l10n.interactive = requestBundles(requestedLangs).then(
-    newBundles => equal(oldBundles, newBundles) ?
-      oldBundles : fetchFirstBundle(newBundles, createContext)
-  );
-}
-
+/**
+ *
+ * Test if two fallback chains are functionally the same.
+ *
+ * @param   {Array<ResourceBundle>} bundles1
+ * @param   {Array<ResourceBundle>} bundles2
+ * @returns {boolean}
+ * @private
+ */
 function equal(bundles1, bundles2) {
   return bundles1.length === bundles2.length &&
     bundles1.every(({lang}, i) => lang === bundles2[i].lang);
