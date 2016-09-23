@@ -7,369 +7,373 @@
 
 [[ File menu ]]
 
-file-menu =
+file-menu = { brand-full-name }
     [xul/label]     File
     [xul/accesskey] F
-tab-menuitem =
+tab-menuitem = { brand-full-name }
     [xul/label]      New Tab
     [xul/accesskey]  T
-tab-key =
+tab-key = { brand-full-name }
     [xul/key]        t
-new-user-context-menu =
+new-user-context-menu = { brand-full-name }
     [xul/label]      New Container Tab
     [xul/accesskey]  C
-new-navigator-menuitem =
+new-navigator-menuitem = { brand-full-name }
     [xul/label]      New Window
     [xul/accesskey]  N
-new-navigator-key =
+new-navigator-key = { brand-full-name }
     [xul/key]        N
-new-private-window-menuitem =
+new-private-window-menuitem = { brand-full-name }
     [xul/label]      New Private Window
     [xul/accesskey]  W
-new-non-remote-window-menuitem =
+new-non-remote-window-menuitem = { brand-full-name }
     [xul/label]      New Non-e10s Window
 
 # Only displayed on OS X, and only on windows that aren't main browser windows,
 # or when there are no windows but Firefox is still running.
-open-location-menuitem =
+open-location-menuitem = { brand-full-name }
     [xul/label]      Open Location…
-open-file-menuitem =
+open-file-menuitem = { brand-full-name }
     [xul/label]      Open File…
     [xul/accesskey]  O
-open-file-key =
+open-file-key = { brand-full-name }
     [xul/key]        o
 
-close-menuitem =
+close-menuitem = { brand-full-name }
     [xul/label]      Close
     [xul/accesskey]  C
-close-key =
+close-key = { brand-full-name }
     [xul/key]        W
-close-window-menuitem =
+close-window-menuitem = { brand-full-name }
     [xul/label]      Close Window
     [xul/accesskey]  d
 
 # [xul/accesskey2] is for content area context menu
-save-page-menuitem =
+save-page-menuitem = { brand-full-name }
     [xul/label]      Save Page As…
     [xul/accesskey]  A
     [xul/accesskey2] P
-save-page-key =
+save-page-key = { brand-full-name }
     [xul/key]        s
 
-email-page-menuitem =
+email-page-menuitem = { brand-full-name }
     [xul/label]      Email Link…
     [xul/accesskey]  E
 
-print-setup-menuitem =
+print-setup-menuitem = { brand-full-name }
     [xul/label]      Page Setup…
     [xul/accesskey]  u
-print-preview-menuitem =
+print-preview-menuitem = { brand-full-name }
     [xul/label]      Print Preview…
     [xul/accesskey]  v
-print-menuitem =
+print-menuitem = { brand-full-name }
     [xul/label]      Print…
     [xul/accesskey]  P
-print-key =
+print-key = { brand-full-name }
     [xul/key]        p
 
-go-offline-menuitem =
+go-offline-menuitem = { brand-full-name }
     [xul/label]      Work Offline
     [xul/accesskey]  k
 
-quit-application-menuitem =
+quit-application-menuitem = { brand-full-name }
     [xul/label]      Quit
     [xul/accesskey]  Q
-quit-application-menuitem-win =
+quit-application-menuitem-win = { brand-full-name }
     [xul/label]      Exit
     [xul/accesskey]  x
-quit-application-menuitem-mac =
+quit-application-menuitem-mac = { brand-full-name }
     [xul/label]      Quit { brand-shorter-name }
 # Used by both Linux and OSX builds
-quit-application-key-unix =
+quit-application-key-unix = { brand-full-name }
     [xul/key]        Q
 
 [[ Edit menu ]]
 
-edit-menu =
+edit-menu = { brand-full-name }
     [xul/label]      Edit
     [xul/accesskey]  E
-undo-menuitem =
+undo-menuitem = { brand-full-name }
     [xul/label]      Undo
     [xul/accesskey]  U
-undo-key =
+undo-key = { brand-full-name }
     [xul/key]        Z
-redo-menuitem =
+redo-menuitem = { brand-full-name }
     [xul/label]      Redo
     [xul/accesskey]  R
-redo-key =
+redo-key = { brand-full-name }
     [xul/key]        Y
-cut-menuitem =
+cut-menuitem = { brand-full-name }
     [xul/label]      Cut
     [xul/accesskey]  t
-cut-key =
+cut-key = { brand-full-name }
     [xul/key]        X
-copy-menuitem =
+copy-menuitem = { brand-full-name }
     [xul/label]      Copy
     [xul/accesskey]  C
-copy-key =
+copy-key = { brand-full-name }
     [xul/key]        C
-paste-menuitem =
+paste-menuitem = { brand-full-name }
     [xul/label]      Paste
     [xul/accesskey]  P
-paste-key =
+paste-key = { brand-full-name }
     [xul/key]        V
-delete-menuitem =
+delete-menuitem = { brand-full-name }
     [xul/label]      Delete
     [xul/accesskey]  D
-delete-key =
+delete-key = { brand-full-name }
     [xul/key]        D
-select-all-menuitem =
+select-all-menuitem = { brand-full-name }
     [xul/label]      Select All
     [xul/accesskey]  A
-select-all-key =
+select-all-key = { brand-full-name }
     [xul/key]        A
 
-find-on-menuitem =
+find-on-menuitem = { brand-full-name }
     [xul/label]      Find in This Page…
     [xul/accesskey]  F
-find-on-key =
+find-on-key = { brand-full-name }
     [xul/key]        f
-find-again-menuitem =
+find-again-menuitem = { brand-full-name }
     [xul/label]      Find Again
     [xul/accesskey]  g
-find-again-key1 =
+find-again-key1 = { brand-full-name }
     [xul/key]        g
-find-again-key2 =
+find-again-key2 = { brand-full-name }
     [xul/keycode]    VK_F3
-find-selection-key =
+find-selection-key = { brand-full-name }
     [xul/key]        e
 
-bidi-switch-text-direction-menuitem =
+bidi-switch-text-direction-menuitem = { brand-full-name }
     [xul/label]      Switch Text Direction
     [xul/accesskey]  w
-bidi-switch-text-direction-key =
+bidi-switch-text-direction-key = { brand-full-name }
     [xul/key]        X
 
-preferences-menuitem =
+preferences-menuitem = { brand-full-name }
     [xul/label]      Options
     [xul/accesskey]  O
-preferences-menuitem-unix =
+preferences-menuitem-unix = { brand-full-name }
     [xul/label]      Preferences
     [xul/accesskey]  n
 
 
 [[ View menu ]]
 
-view-menu =
+view-menu = { brand-full-name }
     [xul/label]      View
     [xul/accesskey]  V
-view-toolbars-menu =
+view-toolbars-menu = { brand-full-name }
     [xul/label]      Toolbars
     [xul/accesskey]  T
-view-sidebar-menu =
+view-sidebar-menu = { brand-full-name }
     [xul/label]      Sidebar
     [xul/accesskey]  e
-view-customize-toolbar-menuitem =
+view-customize-toolbar-menuitem = { brand-full-name }
     [xul/label]      Customize…
     [xul/accesskey]  C
 
-full-zoom-menu =
+full-zoom-menu = { brand-full-name }
     [xul/label]      Zoom
     [xul/accesskey]  Z
-full-zoom-enlarge-menuitem =
+full-zoom-enlarge-menuitem = { brand-full-name }
     [xul/label]      Zoom In
     [xul/accesskey]  I
-full-zoom-enlarge-key1 =
+full-zoom-enlarge-key1 = { brand-full-name }
     [xul/key]        +
-full-zoom-enlarge-key2 =
+full-zoom-enlarge-key2 = { brand-full-name }
     [xul/key]        =
-full-zoom-enlarge-key3 =
+full-zoom-enlarge-key3 = { brand-full-name }
     [xul/key]        ""
-full-zoom-reduce-menuitem =
+full-zoom-reduce-menuitem = { brand-full-name }
     [xul/label]      Zoom Out
     [xul/accesskey]  O
-full-zoom-reduce-key1 =
+full-zoom-reduce-key1 = { brand-full-name }
     [xul/key]        -
-full-zoom-reduce-key2 =
+full-zoom-reduce-key2 = { brand-full-name }
     [xul/key]        ""
-full-zoom-reset-menuitem =
+full-zoom-reset-menuitem = { brand-full-name }
     [xul/label]      Reset
     [xul/accesskey]  R
-full-zoom-reset-key1 =
+full-zoom-reset-key1 = { brand-full-name }
     [xul/key]        0
-full-zoom-reset-key2 =
+full-zoom-reset-key2 = { brand-full-name }
     [xul/key]        ""
-full-zoom-toggle-menuitem =
+full-zoom-toggle-menuitem = { brand-full-name }
     [xul/label]      Zoom Text Only
     [xul/accesskey]  T
 
-page-style-menu =
+page-style-menu = { brand-full-name }
     [xul/label]      Page Style
     [xul/accesskey]  y
-page-style-no-style-menuitem =
+page-style-no-style-menuitem = { brand-full-name }
     [xul/label]      No Style
     [xul/accesskey]  n
-page-style-persistent-only-menuitem =
+page-style-persistent-only-menuitem = { brand-full-name }
     [xul/label]      Basic Page Style
     [xul/accesskey]  b
 
-show-all-tabs-menuitem =
+show-all-tabs-menuitem = { brand-full-name }
     [xul/label]      Show All Tabs
     [xul/accesskey]  A
-bidi-switch-page-direction-menuitem =
+bidi-switch-page-direction-menuitem = { brand-full-name }
     [xul/label]      Switch Page Direction
     [xul/accesskey]  D
 
 # Match what Safari and other Apple applications use on OS X Lion.
 [[ Full Screen controls ]]
 
-enter-full-screen-menuitem =
+enter-full-screen-menuitem = { brand-full-name }
     [xul/label]      Enter Full Screen
     [xul/accesskey]  F
-exit-full-screen-menuitem =
+exit-full-screen-menuitem = { brand-full-name }
     [xul/label]      Exit Full Screen
     [xul/accesskey]  F
-full-screen-menuitem =
+full-screen-menuitem = { brand-full-name }
     [xul/label]      Full Screen
     [xul/accesskey]  F
-full-screen-key =
+full-screen-key = { brand-full-name }
     [xul/key]        f
 
 
 [[ History menu ]]
 
-history-menu =
+history-menu = { brand-full-name }
     [xul/label]        History
     [xul/accesskey]    s
-show-all-history-menuitem =
+show-all-history-menuitem = { brand-full-name }
     [xul/label]        Show All History
-show-all-history-key =
+show-all-history-key = { brand-full-name }
     [xul/key]          H
-clear-recent-history-menuitem =
+clear-recent-history-menuitem = { brand-full-name }
     [xul/label]        Clean Recent History…
-history-synced-tabs-menuitem =
+history-synced-tabs-menuitem = { brand-full-name }
     [xul/label]        Synced Tabs
-history-restore-last-session-menuitem =
+history-restore-last-session-menuitem = { brand-full-name }
     [xul/label]        Restore Previous Session
-history-undo-menu =
+history-undo-menu = { brand-full-name }
     [xul/label]        Recently Closed Tabs
-history-undo-window-menu =
+history-undo-window-menu = { brand-full-name }
     [xul/label]        Recently Closed Windows
 
 
 [[ Bookmarks menu ]]
 
-bookmarks-menu =
+bookmarks-menu = { brand-full-name }
     [xul/label]      Bookmarks
     [xul/accesskey]  B
-show-all-bookmarks-menuitem =
+show-all-bookmarks-menuitem = { brand-full-name }
     [xul/label]      Show All Bookmarks
-show-all-bookmarks-key =
+show-all-bookmarks-key = { brand-full-name }
     [xul/key]        b
 # [xul/key] should not contain the letters A-F since the are reserved shortcut
 # keys on Linux.
-show-all-bookmarks-key-gtk =
+show-all-bookmarks-key-gtk = { brand-full-name }
     [xul/key]        o
-bookmark-this-page-broadcaster =
+bookmark-this-page-broadcaster = { brand-full-name }
     [xul/label]      Bookmark This Page
-edit-this-page-broadcaster =
+edit-this-page-broadcaster = { brand-full-name }
     [xul/label]      Edit This Page
-bookmark-this-page-key =
+bookmark-this-page-key = { brand-full-name }
     [xul/key]        d
-subscribe-to-page-menuitem =
+subscribe-to-page-menuitem = { brand-full-name }
     [xul/label]      Subscribe to This Page…
-subscribe-to-page-menupopup =
+subscribe-to-page-menupopup = { brand-full-name }
     [xul/label]      Subscribe to This Page…
-add-cur-pages-menuitem =
+add-cur-pages-menuitem = { brand-full-name }
     [xul/label]      Bookmark All Tabs…
-recent-bookmarks-menuitem =
+recent-bookmarks-menuitem = { brand-full-name }
     [xul/label]      Recently Bookmarked
 
-other-bookmarks-menu =
+other-bookmarks-menu = { brand-full-name }
     [xul/label]      Other Bookmarks
-personalbar-menu =
+personalbar-menu = { brand-full-name }
     [xul/label]      Bookmarks Toolbar
     [xul/accesskey]  B
 
 
 [[ Tools menu ]]
 
-tools-menu =
+tools-menu = { brand-full-name }
     [xul/label]      Tools
     [xul/accesskey]  T
-downloads-menuitem =
+downloads-menuitem = { brand-full-name }
     [xul/label]      Downloads
     [xul/accesskey]  D
-downloads-key =
+downloads-key = { brand-full-name }
     [xul/key]        j
-downloads-key-unix =
+downloads-key-unix = { brand-full-name }
     [xul/key]        y
-addons-menuitem =
+addons-menuitem = { brand-full-name }
     [xul/label]      Add-ons
     [xul/accesskey]  A
-addons-key =
+addons-key = { brand-full-name }
     [xul/key]        A
 
-sync-sign-in-menuitem =
+sync-sign-in-menuitem = { brand-full-name }
     [xul/label]      Sign In To { sync-brand-short-name }…
     [xul/accesskey]  Y
-sync-sync-now-menuitem =
+sync-sync-now-menuitem = { brand-full-name }
     [xul/label]      Sync Now
     [xul/accesskey]  S
-sync-re-auth-menuitem =
+sync-re-auth-menuitem = { brand-full-name }
     [xul/label]      Reconnect to { sync-brand-short-name }…
     [xul/accesskey]  R
-sync-toolbar-button =
+sync-toolbar-button = { brand-full-name }
     [xul/label]      Sync
 
-web-developer-menu =
+web-developer-menu = { brand-full-name }
     [xul/label]      Web Developer
     [xul/accesskey]  W
 
-page-source-broadcaster =
+page-source-broadcaster = { brand-full-name }
     [xul/label]      Page Source
     [xul/accesskey]  o
-page-source-key =
+page-source-key = { brand-full-name }
     [xul/key]        u
-page-info-menuitem =
+page-info-menuitem = { brand-full-name }
     [xul/label]      Page Info
     [xul/accesskey]  I
-page-info-key =
+page-info-key = { brand-full-name }
     [xul/key]        i
-mirror-tab-menu =
+mirror-tab-menu = { brand-full-name }
     [xul/label]      Mirror Tab
     [xul/accesskey]  m
 
 
 # browser/locales/en-US/browser/toolbar.ftl
 
-urlbar-textbox =
+urlbar-textbox = { brand-full-name }
     [xul/placeholder] Search or enter address
     [xul/accesskey]   d
 
 
 [[ Toolbar items ]]
 
-view-bookmarks-broadcaster =
+view-bookmarks-broadcaster = { brand-full-name }
     [xul/label]      Bookmarks
-view-bookmarks-key =
+view-bookmarks-key = { brand-full-name }
     [xul/key]        b
-view-bookmarks-key-win =
+view-bookmarks-key-win = { brand-full-name }
     [xul/key]        i
 
-view-history-broadcaster =
+view-history-broadcaster = { brand-full-name }
     [xul/label]      History
-view-history-key =
+view-history-key = { brand-full-name }
     [xul/key]        h
-view-tabs-broadcaster =
+view-tabs-broadcaster = { brand-full-name }
     [xul/label]      Synced Tabs
 
 
 # browser/branding/official/locales/en-US/brand.ftl
 
-brand-shorter-name    = Firefox
-brand-short-name      = Firefox
-brand-full-name       = Mozilla Firefox
+brand-shorter-name    = { brand-short-name }
+brand-short-name      =
+   *[nominative]        Firefox
+    [genitive]          Firefox's
+brand-full-name       = { vendor-short-name ->
+    [Mozilla]           { vendor-short-name } { brand-shorter-name}
+}
 vendor-short-name     = Mozilla
 
 trademark-info        = 
