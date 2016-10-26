@@ -26,7 +26,7 @@
   "browser": "./dist/bundle/web/l20n-common.js",
   "repository": {
     "type": "git",
-    "url": "https://github.com/l20n/l20n.js.git"
+    "url": "https://github.com/tomekstach/l20n.js.git"
   },
   "keywords": [
     "localization",

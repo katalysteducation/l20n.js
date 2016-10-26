@@ -5,7 +5,7 @@
   "homepage": "http://l20n.org",
   "repository": {
     "type": "git",
-    "url": "git://github.com/l20n/l20n.js.git"
+    "url": "git://github.com/tomekstach/l20n.js.git"
   },
   "authors": [
     "Mozilla <l10n-drivers@mozilla.org>",
