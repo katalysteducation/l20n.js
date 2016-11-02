@@ -1230,7 +1230,9 @@ class ChromeResourceBundle {
 // https://github.com/whatwg/html/issues/127
 function documentReady() {
   const rs = document.readyState;
-  if (rs === 'interactive' || rs === 'completed') {
+  // !important
+  // if (rs === 'interactive' || rs === 'completed') {
+  if (rs !== 'loading') {
     return Promise.resolve();
   }
 

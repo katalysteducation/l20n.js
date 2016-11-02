@@ -1197,7 +1197,9 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
     // https://github.com/whatwg/html/issues/127
     var documentReady = function documentReady() {
       var rs = document.readyState;
-      if (rs === 'interactive' || rs === 'completed') {
+      // !important
+      // if (rs === 'interactive' || rs === 'completed') {
+      if (rs !== 'loading') {
         return Promise.resolve();
       }
 
@@ -2661,7 +2663,11 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
       function FTLDateTime(value, opts) {
         _classCallCheck(this, FTLDateTime);
 
-        return _possibleConstructorReturn(this, _FTLType3.call(this, new Date(value), opts));
+        // !important
+        var dateTime = value.split('T');
+        var date = dateTime[0].split('-');
+        var time = dateTime[1].split(':');
+        return _possibleConstructorReturn(this, _FTLType3.call(this, new Date(date[0], date[1] - 1, date[2], time[0], time[1], parseInt(time[2])), opts));
       }
 
       FTLDateTime.prototype.toString = function toString(ctx) {

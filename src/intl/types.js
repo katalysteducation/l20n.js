@@ -62,7 +62,12 @@ export class FTLNumber extends FTLType {
 
 export class FTLDateTime extends FTLType {
   constructor(value, opts) {
-    super(new Date(value), opts);
+    // !important
+    const dateTime = value.split('T');
+    const date = dateTime[0].split('-');
+    const time = dateTime[1].split(':');
+    super(new Date(date[0], date[1] - 1, date[2], time[0], time[1],
+      parseInt(time[2])), opts);
   }
   toString(ctx) {
     const dtf = ctx._memoizeIntlObject(
