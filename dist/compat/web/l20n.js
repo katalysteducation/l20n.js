@@ -2663,11 +2663,7 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
       function FTLDateTime(value, opts) {
         _classCallCheck(this, FTLDateTime);
 
-        // !important
-        var dateTime = value.split('T');
-        var date = dateTime[0].split('-');
-        var time = dateTime[1].split(':');
-        return _possibleConstructorReturn(this, _FTLType3.call(this, new Date(date[0], date[1] - 1, date[2], time[0], time[1], parseInt(time[2])), opts));
+        return _possibleConstructorReturn(this, _FTLType3.call(this, new Date(value), opts));
       }
 
       FTLDateTime.prototype.toString = function toString(ctx) {
@@ -2765,7 +2761,12 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
       },
       'DATETIME': function DATETIME(_ref3, opts) {
         var arg = _ref3[0];
-        return new FTLDateTime(arg.valueOf(), merge(arg.opts, opts));
+
+        var dateT = arg.split('T');
+        var date = dateT[0].split('-');
+        var time = dateT[1].split(':');
+        arg = Date(date[0], date[1] - 1, date[2], time[0], time[1], parseInt(time[2]));
+        new FTLDateTime(arg.valueOf(), merge(arg.opts, opts));
       },
       'LIST': function LIST(args) {
         return FTLList.from(args);
