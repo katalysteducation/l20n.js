@@ -709,6 +709,8 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
      *   hasErrors: boolean,
      *   translations: Array<string>|Array<{value: string, attrs: Object}>}}
      */
+
+
     var keysFromContext = function keysFromContext(method, sanitizeArgs, ctx, keys, prev) {
       var entityErrors = [];
       var current = {
@@ -809,7 +811,8 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
         for (var i = 0, trait; trait = entity.traits[i]; i++) {
           var attr = ctx.format(trait, args, errors);
           if (attr !== null) {
-            formatted.attrs[trait.key.name] = attr;
+            var key = trait.key.ns ? trait.key.ns + '/' + trait.key.name : trait.key.name;
+            formatted.attrs[key] = attr;
           }
         }
       }
@@ -862,8 +865,8 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
 
 
     var equal = function equal(bundles1, bundles2) {
-      return bundles1.length === bundles2.length && bundles1.every(function (_ref28, i) {
-        var lang = _ref28.lang;
+      return bundles1.length === bundles2.length && bundles1.every(function (_ref21, i) {
+        var lang = _ref21.lang;
         return lang === bundles2[i].lang;
       });
     };
@@ -945,12 +948,11 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
     /**
      * Overlay translation onto a DOM element.
      *
-     * @param   {Localization} l10n
      * @param   {Element}      element
      * @param   {string}       translation
      * @private
      */
-    var _overlayElement = function _overlayElement(l10n, element, translation) {
+    var overlayElement = function overlayElement(element, translation) {
       var value = translation.value;
 
       if (typeof value === 'string') {
@@ -963,13 +965,17 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
           var tmpl = element.ownerDocument.createElementNS('http://www.w3.org/1999/xhtml', 'template');
           tmpl.innerHTML = value;
           // Overlay the node with the DocumentFragment.
-          overlay(l10n, element, tmpl.content);
+          overlay(element, tmpl.content);
         }
       }
 
       for (var key in translation.attrs) {
-        if (l10n.isAttrAllowed({ name: key }, element)) {
-          element.setAttribute(key, translation.attrs[key]);
+        var _ref22 = key.includes('/') ? key.split('/', 2) : [null, key],
+            ns = _ref22[0],
+            name = _ref22[1];
+
+        if (isAttrAllowed({ ns: ns, name: name }, element)) {
+          element.setAttribute(name, translation.attrs[key]);
         }
       }
     };
@@ -986,7 +992,7 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
     // bindings in MVC frameworks).
 
 
-    var overlay = function overlay(l10n, sourceElement, translationElement) {
+    var overlay = function overlay(sourceElement, translationElement) {
       var result = translationElement.ownerDocument.createDocumentFragment();
       var k = void 0,
           attr = void 0;
@@ -1007,14 +1013,14 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
         var sourceChild = getNthElementOfType(sourceElement, childElement, _index);
         if (sourceChild) {
           // There is a corresponding element in the source, let's use it.
-          overlay(l10n, sourceChild, childElement);
+          overlay(sourceChild, childElement);
           result.appendChild(sourceChild);
           continue;
         }
 
-        if (l10n.isElementAllowed(childElement)) {
+        if (isElementAllowed(childElement)) {
           var sanitizedChild = childElement.ownerDocument.createElement(childElement.nodeName);
-          overlay(l10n, sanitizedChild, childElement);
+          overlay(sanitizedChild, childElement);
           result.appendChild(sanitizedChild);
           continue;
         }
@@ -1034,11 +1040,88 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
       // cleared if a new language doesn't use them; https://bugzil.la/922577
       if (translationElement.attributes) {
         for (k = 0, attr; attr = translationElement.attributes[k]; k++) {
-          if (l10n.isAttrAllowed(attr, sourceElement)) {
+          if (isAttrAllowed({
+            ns: DOM_NAMESPACES[translationElement.namespaceURI],
+            name: attr.name
+          }, sourceElement)) {
             sourceElement.setAttribute(attr.name, attr.value);
           }
         }
       }
+    };
+
+    /**
+     * Check if element is allowed in the translation.
+     *
+     * This method is used by the sanitizer when the translation markup contains
+     * an element which is not present in the source code.
+     *
+     * @param   {Element} element
+     * @returns {boolean}
+     * @private
+     */
+
+
+    var isElementAllowed = function isElementAllowed(element) {
+      var allowed = ALLOWED_ELEMENTS[element.namespaceURI];
+      if (!allowed) {
+        return false;
+      }
+
+      return allowed.indexOf(element.tagName.toLowerCase()) !== -1;
+    };
+
+    /**
+     * Check if attribute is allowed for the given element.
+     *
+     * This method is used by the sanitizer when the translation markup contains
+     * DOM attributes, or when the translation has traits which map to DOM
+     * attributes.
+     *
+     * @param   {{name: string}} attr
+     * @param   {Element}        element
+     * @returns {boolean}
+     * @private
+     */
+
+
+    var isAttrAllowed = function isAttrAllowed(attr, element) {
+      // Does it have a namespace that matches the element's?
+      if (attr.ns === null || DOM_NAMESPACES[attr.ns] !== element.namespaceURI) {
+        return false;
+      }
+      var allowed = ALLOWED_ATTRIBUTES[element.namespaceURI];
+      if (!allowed) {
+        return false;
+      }
+
+      var attrName = attr.name.toLowerCase();
+      var elemName = element.tagName.toLowerCase();
+
+      // Is it a globally safe attribute?
+      if (allowed.global.indexOf(attrName) !== -1) {
+        return true;
+      }
+
+      // Are there no allowed attributes for this element?
+      if (!allowed[elemName]) {
+        return false;
+      }
+
+      // Is it allowed on this element?
+      if (allowed[elemName].indexOf(attrName) !== -1) {
+        return true;
+      }
+
+      // Special case for value on HTML inputs with type button, reset, submit
+      if (element.namespaceURI === 'http://www.w3.org/1999/xhtml' && elemName === 'input' && attrName === 'value') {
+        var type = element.type.toLowerCase();
+        if (type === 'submit' || type === 'button' || type === 'reset') {
+          return true;
+        }
+      }
+
+      return false;
     };
 
     // Get n-th immediate child of context that is of the same type as element.
@@ -1113,24 +1196,24 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
     // A document.ready shim
     // https://github.com/whatwg/html/issues/127
     var documentReady = function documentReady() {
-      if (document.readyState !== 'loading') {
+      var rs = document.readyState;
+      // Important!!!
+      // if (rs === 'interactive' || rs === 'completed') {
+      if (rs !== 'loading') {
         return Promise.resolve();
       }
 
       return new Promise(function (resolve) {
-        document.addEventListener('readystatechange', function onrsc() {
-          document.removeEventListener('readystatechange', onrsc);
-          resolve();
-        });
+        return document.addEventListener('readystatechange', resolve, { once: true });
       });
     };
 
-    var getResourceLinks = function getResourceLinks(head) {
-      return Array.prototype.map.call(head.querySelectorAll('link[rel="localization"]'), function (el) {
+    var getResourceLinks = function getResourceLinks(elem) {
+      return Array.prototype.map.call(elem.querySelectorAll('link[rel="localization"]'), function (el) {
         return [el.getAttribute('href'), el.getAttribute('name') || 'main'];
-      }).reduce(function (seq, _ref29) {
-        var href = _ref29[0],
-            name = _ref29[1];
+      }).reduce(function (seq, _ref30) {
+        var href = _ref30[0],
+            name = _ref30[1];
         return seq.set(name, (seq.get(name) || []).concat(href));
       }, new Map());
     };
@@ -1143,18 +1226,18 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
       // XXX take last found instead of first?
       var metas = Array.from(head.querySelectorAll('meta[name="availableLanguages"],' + 'meta[name="defaultLanguage"],' + 'meta[name="appVersion"]'));
       for (var _iterator13 = metas, _isArray13 = Array.isArray(_iterator13), _i13 = 0, _iterator13 = _isArray13 ? _iterator13 : _iterator13[Symbol.iterator]();;) {
-        var _ref30;
+        var _ref31;
 
         if (_isArray13) {
           if (_i13 >= _iterator13.length) break;
-          _ref30 = _iterator13[_i13++];
+          _ref31 = _iterator13[_i13++];
         } else {
           _i13 = _iterator13.next();
           if (_i13.done) break;
-          _ref30 = _i13.value;
+          _ref31 = _i13.value;
         }
 
-        var meta = _ref30;
+        var meta = _ref31;
 
         var name = meta.getAttribute('name');
         var _content = meta.getAttribute('content').trim();
@@ -1198,7 +1281,7 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
         return Promise.resolve(bundles);
       }
 
-      var l10n = new HTMLLocalization(requestBundles, createContext);
+      var l10n = new Localization(requestBundles, createContext);
       document.l10n.set(name, l10n);
 
       if (name === 'main') {
@@ -2862,6 +2945,338 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
       };
     }
 
+    var properties = new WeakMap();
+    var contexts = new WeakMap();
+
+    /**
+     * The `Localization` class is responsible for fetching resources and
+     * formatting translations.
+     *
+     * It implements the fallback strategy in case of errors encountered during the
+     * formatting of translations.
+     *
+     * In HTML and XUL, l20n.js will create an instance of `Localization` for the
+     * default set of `<link rel="localization">` elements.  You can get
+     * a reference to it via:
+     *
+     *     const localization = document.l10n.get('main');
+     *
+     * Different names can be specified via the `name` attribute on the `<link>`
+     * elements.  One `document` can have more than one `Localization` instance,
+     * but one `Localization` instance can only be assigned to a single `document`.
+     */
+
+    var Localization = function () {
+
+      /**
+       * Create an instance of the `Localization` class.
+       *
+       * The instance's configuration is provided by two runtime-dependent
+       * functions passed to the constructor.
+       *
+       * The `requestBundles` function takes an array of language codes and returns
+       * a Promise of an array of lazy `ResourceBundle` instances.  The
+       * `Localization` instance will imediately call the `fetch` method of the
+       * first bundle returned by `requestBundles` and may call `fetch` on
+       * subsequent bundles in fallback scenarios.
+       *
+       * The array of bundles is the de-facto current fallback chain of languages
+       * and fetch locations.
+       *
+       * The `createContext` function takes a language code and returns an instance
+       * of `Intl.MessageContext`.  Since it's also provided to the constructor by
+       * the runtime it may pass runtime-specific `functions` to the
+       * `MessageContext` instances it creates.
+       *
+       * @param   {Function}     requestBundles
+       * @param   {Function}     createContext
+       * @returns {Localization}
+       */
+      function Localization(requestBundles, createContext) {
+        _classCallCheck(this, Localization);
+
+        var createHeadContext = function createHeadContext(bundles) {
+          return createHeadContextWith(createContext, bundles);
+        };
+
+        // Keep `requestBundles` and `createHeadContext` private.
+        properties.set(this, {
+          requestBundles: requestBundles, createHeadContext: createHeadContext
+        });
+
+        /**
+         * A Promise which resolves when the `Localization` instance has fetched
+         * and parsed all localization resources in the user's first preferred
+         * language (if available).
+         *
+         *     localization.interactive.then(callback);
+         */
+        this.interactive = requestBundles().then(
+        // Create a `MessageContext` for the first bundle right away.
+        function (bundles) {
+          return createHeadContext(bundles).then(
+          // Force `this.interactive` to resolve to the list of bundles.
+          function () {
+            return bundles;
+          });
+        });
+      }
+
+      /**
+       * Initiate the change of the currently negotiated languages.
+       *
+       * `requestLanguages` takes an array of language codes representing user's
+       * updated language preferences.
+       *
+       * @param   {Array<string>}     requestedLangs
+       * @returns {Promise<Array<ResourceBundle>>}
+       */
+
+
+      Localization.prototype.requestLanguages = function requestLanguages(requestedLangs) {
+        var _properties$get = properties.get(this),
+            requestBundles = _properties$get.requestBundles,
+            createHeadContext = _properties$get.createHeadContext;
+
+        // Assign to `this.interactive` to make all translations requested after
+        // the language change request come from the new fallback chain.
+
+
+        return this.interactive = Promise.all(
+        // Get the current bundles to be able to compare them to the new result
+        // of the language negotiation.
+        [this.interactive, requestBundles(requestedLangs)]).then(function (_ref19) {
+          var oldBundles = _ref19[0],
+              newBundles = _ref19[1];
+
+          if (equal(oldBundles, newBundles)) {
+            return oldBundles;
+          }
+
+          return createHeadContext(newBundles).then(function () {
+            return newBundles;
+          });
+        });
+      };
+
+      /**
+       * Format translations and handle fallback if needed.
+       *
+       * Format translations for `keys` from `MessageContext` instances
+       * corresponding to the current bundles.  In case of errors, fetch the next
+       * bundle in the fallback chain, create a context for it, and recursively
+       * call `formatWithFallback` again.
+       *
+       * @param   {Array<ResourceBundle>} bundles - Current bundles.
+       * @param   {Array<Array>}          keys    - Translation keys to format.
+       * @param   {Function}              method  - Formatting function.
+       * @param   {Array<string>}         [prev]  - Previous translations.
+       * @returns {Array<string> | Promise<Array<string>>}
+       * @private
+       */
+
+
+      Localization.prototype.formatWithFallback = function formatWithFallback(bundles, ctx, keys, method, prev) {
+        var _this7 = this;
+
+        // If a context for the head bundle doesn't exist we've reached the last
+        // bundle in the fallback chain.  This is the end condition which returns
+        // the translations formatted during the previous (recursive) calls to
+        // `formatWithFallback`.
+        if (!ctx && prev) {
+          return prev.translations;
+        }
+
+        var current = method(ctx, keys, prev);
+
+        // `hasErrors` is a flag set by `keysFromContext` to notify about errors
+        // during the formatting.  We can't just check the `length` of the `errors`
+        // property because it is fixed and equal to the length of `keys`.
+        if (!current.hasErrors) {
+          return current.translations;
+        }
+
+        // In Gecko `console` needs to imported explicitly.
+        if (typeof console !== 'undefined') {
+          // The `errors` property is an array of arrays, each containing all
+          // errors encountered for the translation at the same position in `keys`.
+          // If there were no errors for a given translation, `errors` will contain
+          // an `undefined` instead of the array of errors.  Most translations are
+          // simple string which don't produce errors.
+          current.errors.forEach(function (errs) {
+            return errs ? errs.forEach(function (e) {
+              return console.warn(e);
+            } // eslint-disable-line no-console
+            ) : null;
+          });
+        }
+
+        // At this point we need to fetch the next bundle in the fallback chain and
+        // create a `MessageContext` instance for it.
+        var tailBundles = bundles.slice(1);
+
+        var _properties$get2 = properties.get(this),
+            createHeadContext = _properties$get2.createHeadContext;
+
+        return createHeadContext(tailBundles).then(function (next) {
+          return _this7.formatWithFallback(tailBundles, next, keys, method, current);
+        });
+      };
+
+      /**
+       * Format translations into {value, attrs} objects.
+       *
+       * This is an internal method used by `LocalizationObserver` instances.  The
+       * fallback logic is the same as in `formatValues` but the argument type is
+       * stricter (an array of arrays) and it returns {value, attrs} objects which
+       * are suitable for the translation of DOM elements.
+       *
+       *     document.l10n.formatEntities([j
+       *       ['hello', { who: 'Mary' }],
+       *       ['welcome', undefined]
+       *     ]).then(console.log);
+       *
+       *     // [
+       *     //   { value: 'Hello, Mary!', attrs: null },
+       *     //   { value: 'Welcome!', attrs: { title: 'Hello' } }
+       *     // ]
+       *
+       * Returns a Promise resolving to an array of the translation strings.
+       *
+       * @param   {Array<Array>} keys
+       * @returns {Promise<Array<{value: string, attrs: Object}>>}
+       * @private
+       */
+
+
+      Localization.prototype.formatEntities = function formatEntities(keys) {
+        var _this8 = this;
+
+        return this.interactive.then(function (bundles) {
+          return _this8.formatWithFallback(bundles, contexts.get(bundles[0]), keys, entitiesFromContext);
+        });
+      };
+
+      /**
+       * Retrieve translations corresponding to the passed keys.
+       *
+       * A generalized version of `Localization.formatValue`.  Keys can either be
+       * simple string identifiers or `[id, args]` arrays.
+       *
+       *     document.l10n.formatValues(
+       *       ['hello', { who: 'Mary' }],
+       *       ['hello', { who: 'John' }],
+       *       'welcome'
+       *     ).then(console.log);
+       *
+       *     // ['Hello, Mary!', 'Hello, John!', 'Welcome!']
+       *
+       * Returns a Promise resolving to an array of the translation strings.
+       *
+       * @param   {...(Array | string)} keys
+       * @returns {Promise<Array<string>>}
+       */
+
+
+      Localization.prototype.formatValues = function formatValues() {
+        var _this9 = this;
+
+        for (var _len = arguments.length, keys = Array(_len), _key = 0; _key < _len; _key++) {
+          keys[_key] = arguments[_key];
+        }
+
+        // Convert string keys into arrays that `formatWithFallback` expects.
+        var keyTuples = keys.map(function (key) {
+          return Array.isArray(key) ? key : [key, null];
+        });
+        return this.interactive.then(function (bundles) {
+          return _this9.formatWithFallback(bundles, contexts.get(bundles[0]), keyTuples, valuesFromContext);
+        });
+      };
+
+      /**
+       * Retrieve the translation corresponding to the `id` identifier.
+       *
+       * If passed, `args` is a simple hash object with a list of variables that
+       * will be interpolated in the value of the translation.
+       *
+       *     localization.formatValue(
+       *       'hello', { who: 'world' }
+       *     ).then(console.log);
+       *
+       *     // 'Hello, world!'
+       *
+       * Returns a Promise resolving to the translation string.
+       *
+       * Use this sparingly for one-off messages which don't need to be
+       * retranslated when the user changes their language preferences, e.g. in
+       * notifications.
+       *
+       * @param   {string}  id     - Identifier of the translation to format
+       * @param   {Object}  [args] - Optional external arguments
+       * @returns {Promise<string>}
+       */
+
+
+      Localization.prototype.formatValue = function formatValue(id, args) {
+        return this.formatValues([id, args]).then(function (_ref20) {
+          var val = _ref20[0];
+          return val;
+        });
+      };
+
+      return Localization;
+    }();
+
+    var reHtml = /[&<>]/g;
+    var htmlEntities = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;'
+    };
+
+    // Unicode bidi isolation characters.
+    var FSI = '\u2068';
+    var PDI = '\u2069';var reOverlay = /<|&#?\w+;/;
+
+    // XXX The allowed list should be amendable; https://bugzil.la/922573.
+    var ALLOWED_ELEMENTS = {
+      'http://www.w3.org/1999/xhtml': ['a', 'em', 'strong', 'small', 's', 'cite', 'q', 'dfn', 'abbr', 'data', 'time', 'code', 'var', 'samp', 'kbd', 'sub', 'sup', 'i', 'b', 'u', 'mark', 'ruby', 'rt', 'rp', 'bdi', 'bdo', 'span', 'br', 'wbr']
+    };
+
+    var ALLOWED_ATTRIBUTES = {
+      'http://www.w3.org/1999/xhtml': {
+        global: ['title', 'aria-label', 'aria-valuetext', 'aria-moz-hint'],
+        a: ['download'],
+        area: ['download', 'alt'],
+        // value is special-cased in isAttrAllowed
+        input: ['alt', 'placeholder'],
+        menuitem: ['label'],
+        menu: ['label'],
+        optgroup: ['label'],
+        option: ['label'],
+        track: ['label'],
+        img: ['alt'],
+        textarea: ['placeholder'],
+        th: ['abbr']
+      },
+      'http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul': {
+        global: ['accesskey', 'aria-label', 'aria-valuetext', 'aria-moz-hint', 'label'],
+        key: ['key', 'keycode'],
+        textbox: ['placeholder'],
+        toolbarbutton: ['tooltiptext']
+      }
+    };
+
+    var DOM_NAMESPACES = {
+      'html': 'http://www.w3.org/1999/xhtml',
+      'xul': 'http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul',
+
+      // Reverse map for overlays.
+      'http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul': 'xul',
+      'http://www.w3.org/1999/xhtml': 'html'
+    };
+
     var observerConfig = {
       attributes: true,
       characterData: false,
@@ -2884,14 +3299,14 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
        * @returns {LocalizationObserver}
        */
       function LocalizationObserver() {
-        var _this7 = this;
+        var _this10 = this;
 
         _classCallCheck(this, LocalizationObserver);
 
         this.localizations = new Map();
         this.roots = new WeakMap();
         this.observer = new MutationObserver(function (mutations) {
-          return _this7.translateMutations(mutations);
+          return _this10.translateMutations(mutations);
         });
       }
 
@@ -2981,13 +3396,13 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
 
 
       LocalizationObserver.prototype.requestLanguages = function requestLanguages(requestedLangs) {
-        var _this8 = this;
+        var _this11 = this;
 
         var localizations = Array.from(this.localizations.values());
         return Promise.all(localizations.map(function (l10n) {
           return l10n.requestLanguages(requestedLangs);
         })).then(function () {
-          return _this8.translateAllRoots();
+          return _this11.translateAllRoots();
         });
       };
 
@@ -3092,20 +3507,20 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
 
         this.pause();
         for (var _iterator7 = this.localizations, _isArray7 = Array.isArray(_iterator7), _i7 = 0, _iterator7 = _isArray7 ? _iterator7 : _iterator7[Symbol.iterator]();;) {
-          var _ref19;
+          var _ref23;
 
           if (_isArray7) {
             if (_i7 >= _iterator7.length) break;
-            _ref19 = _iterator7[_i7++];
+            _ref23 = _iterator7[_i7++];
           } else {
             _i7 = _iterator7.next();
             if (_i7.done) break;
-            _ref19 = _i7.value;
+            _ref23 = _i7.value;
           }
 
-          var _ref20 = _ref19,
-              name = _ref20[0],
-              l10n = _ref20[1];
+          var _ref24 = _ref23,
+              name = _ref24[0],
+              l10n = _ref24[1];
 
           var roots = this.roots.get(l10n);
           if (roots && roots.has(root)) {
@@ -3138,33 +3553,33 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
 
       LocalizationObserver.prototype.resume = function resume() {
         for (var _iterator8 = this.localizations.values(), _isArray8 = Array.isArray(_iterator8), _i8 = 0, _iterator8 = _isArray8 ? _iterator8 : _iterator8[Symbol.iterator]();;) {
-          var _ref21;
+          var _ref25;
 
           if (_isArray8) {
             if (_i8 >= _iterator8.length) break;
-            _ref21 = _iterator8[_i8++];
+            _ref25 = _iterator8[_i8++];
           } else {
             _i8 = _iterator8.next();
             if (_i8.done) break;
-            _ref21 = _i8.value;
+            _ref25 = _i8.value;
           }
 
-          var l10n = _ref21;
+          var l10n = _ref25;
 
           if (this.roots.has(l10n)) {
             for (var _iterator9 = this.roots.get(l10n), _isArray9 = Array.isArray(_iterator9), _i9 = 0, _iterator9 = _isArray9 ? _iterator9 : _iterator9[Symbol.iterator]();;) {
-              var _ref22;
+              var _ref26;
 
               if (_isArray9) {
                 if (_i9 >= _iterator9.length) break;
-                _ref22 = _iterator9[_i9++];
+                _ref26 = _iterator9[_i9++];
               } else {
                 _i9 = _iterator9.next();
                 if (_i9.done) break;
-                _ref22 = _i9.value;
+                _ref26 = _i9.value;
               }
 
-              var root = _ref22;
+              var root = _ref26;
 
               this.observer.observe(root, observerConfig);
             }
@@ -3184,16 +3599,16 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
 
 
       LocalizationObserver.prototype.translateAllRoots = function translateAllRoots() {
-        var _this9 = this;
+        var _this12 = this;
 
         var localizations = Array.from(this.localizations.values());
         return Promise.all(localizations.map(function (l10n) {
-          return _this9.translateRoots(l10n);
+          return _this12.translateRoots(l10n);
         }));
       };
 
       LocalizationObserver.prototype.translateRoots = function translateRoots(l10n) {
-        var _this10 = this;
+        var _this13 = this;
 
         if (!this.roots.has(l10n)) {
           return Promise.resolve();
@@ -3201,7 +3616,7 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
 
         var roots = Array.from(this.roots.get(l10n));
         return Promise.all(roots.map(function (root) {
-          return _this10.translateRoot(root, l10n);
+          return _this13.translateRoot(root, l10n);
         }));
       };
 
@@ -3229,20 +3644,33 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
         return this.translateRootContent(root).then(setLangs);
       };
 
+      LocalizationObserver.prototype.translateRootContent = function translateRootContent(root) {
+        var _this14 = this;
+
+        var anonChildren = document.getAnonymousNodes ? document.getAnonymousNodes(root) : null;
+        if (!anonChildren) {
+          return this.translateFragment(root);
+        }
+
+        return Promise.all([root].concat(anonChildren).map(function (node) {
+          return _this14.translateFragment(node);
+        }));
+      };
+
       LocalizationObserver.prototype.translateMutations = function translateMutations(mutations) {
         for (var _iterator10 = mutations, _isArray10 = Array.isArray(_iterator10), _i10 = 0, _iterator10 = _isArray10 ? _iterator10 : _iterator10[Symbol.iterator]();;) {
-          var _ref23;
+          var _ref27;
 
           if (_isArray10) {
             if (_i10 >= _iterator10.length) break;
-            _ref23 = _iterator10[_i10++];
+            _ref27 = _iterator10[_i10++];
           } else {
             _i10 = _iterator10.next();
             if (_i10.done) break;
-            _ref23 = _i10.value;
+            _ref27 = _i10.value;
           }
 
-          var mutation = _ref23;
+          var mutation = _ref27;
 
           switch (mutation.type) {
             case 'attributes':
@@ -3250,18 +3678,18 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
               break;
             case 'childList':
               for (var _iterator11 = mutation.addedNodes, _isArray11 = Array.isArray(_iterator11), _i11 = 0, _iterator11 = _isArray11 ? _iterator11 : _iterator11[Symbol.iterator]();;) {
-                var _ref24;
+                var _ref28;
 
                 if (_isArray11) {
                   if (_i11 >= _iterator11.length) break;
-                  _ref24 = _iterator11[_i11++];
+                  _ref28 = _iterator11[_i11++];
                 } else {
                   _i11 = _iterator11.next();
                   if (_i11.done) break;
-                  _ref24 = _i11.value;
+                  _ref28 = _i11.value;
                 }
 
-                var addedNode = _ref24;
+                var addedNode = _ref28;
 
                 if (addedNode.nodeType === addedNode.ELEMENT_NODE) {
                   if (addedNode.childElementCount) {
@@ -3292,15 +3720,15 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
 
 
       LocalizationObserver.prototype.translateFragment = function translateFragment(frag) {
-        var _this11 = this;
+        var _this15 = this;
 
         return Promise.all(this.groupTranslatablesByLocalization(frag).map(function (elemsWithL10n) {
-          return _this11.translateElements(elemsWithL10n[0], elemsWithL10n[1]);
+          return _this15.translateElements(elemsWithL10n[0], elemsWithL10n[1]);
         }));
       };
 
       LocalizationObserver.prototype.translateElements = function translateElements(l10n, elements) {
-        var _this12 = this;
+        var _this16 = this;
 
         if (!elements.length) {
           return [];
@@ -3308,7 +3736,7 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
 
         var keys = elements.map(this.getKeysForElement);
         return l10n.formatEntities(keys).then(function (translations) {
-          return _this12.applyTranslations(l10n, elements, translations);
+          return _this16.applyTranslations(elements, translations);
         });
       };
 
@@ -3323,18 +3751,18 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
 
 
       LocalizationObserver.prototype.translateElement = function translateElement(element) {
-        var _this13 = this;
+        var _this17 = this;
 
         var l10n = this.get(element.getAttribute('data-l10n-bundle') || 'main');
         return l10n.formatEntities([this.getKeysForElement(element)]).then(function (translations) {
-          return _this13.applyTranslations(l10n, [element], translations);
+          return _this17.applyTranslations([element], translations);
         });
       };
 
-      LocalizationObserver.prototype.applyTranslations = function applyTranslations(l10n, elements, translations) {
+      LocalizationObserver.prototype.applyTranslations = function applyTranslations(elements, translations) {
         this.pause();
         for (var i = 0; i < elements.length; i++) {
-          l10n.overlayElement(elements[i], translations[i]);
+          overlayElement(elements[i], translations[i]);
         }
         this.resume();
       };
@@ -3342,18 +3770,18 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
       LocalizationObserver.prototype.groupTranslatablesByLocalization = function groupTranslatablesByLocalization(frag) {
         var elemsWithL10n = [];
         for (var _iterator12 = this.localizations, _isArray12 = Array.isArray(_iterator12), _i12 = 0, _iterator12 = _isArray12 ? _iterator12 : _iterator12[Symbol.iterator]();;) {
-          var _ref25;
+          var _ref29;
 
           if (_isArray12) {
             if (_i12 >= _iterator12.length) break;
-            _ref25 = _iterator12[_i12++];
+            _ref29 = _iterator12[_i12++];
           } else {
             _i12 = _iterator12.next();
             if (_i12.done) break;
-            _ref25 = _i12.value;
+            _ref29 = _i12.value;
           }
 
-          var loc = _ref25;
+          var loc = _ref29;
 
           elemsWithL10n.push([loc[1], this.getTranslatables(frag, loc[0])]);
         }
@@ -3384,446 +3812,6 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
       return LocalizationObserver;
     }();
 
-    /**
-     * The `ContentLocalizationObserver` is an extension of a `LocalizationObserver`
-     * class which is used for all Web content.
-     *
-     * This class is used for all HTML content translations.
-     */
-
-
-    var ContentLocalizationObserver = function (_LocalizationObserver) {
-      _inherits(ContentLocalizationObserver, _LocalizationObserver);
-
-      function ContentLocalizationObserver() {
-        _classCallCheck(this, ContentLocalizationObserver);
-
-        return _possibleConstructorReturn(this, _LocalizationObserver.apply(this, arguments));
-      }
-
-      ContentLocalizationObserver.prototype.translateRootContent = function translateRootContent(root) {
-        return this.translateFragment(root);
-      };
-
-      return ContentLocalizationObserver;
-    }(LocalizationObserver);
-
-    var properties = new WeakMap();
-    var contexts = new WeakMap();
-
-    /**
-     * The `Localization` class is responsible for fetching resources and
-     * formatting translations.
-     *
-     * It implements the fallback strategy in case of errors encountered during the
-     * formatting of translations.
-     *
-     * In HTML and XUL, l20n.js will create an instance of `Localization` for the
-     * default set of `<link rel="localization">` elements.  You can get
-     * a reference to it via:
-     *
-     *     const localization = document.l10n.get('main');
-     *
-     * Different names can be specified via the `name` attribute on the `<link>`
-     * elements.  One `document` can have more than one `Localization` instance,
-     * but one `Localization` instance can only be assigned to a single `document`.
-     *
-     * `HTMLLocalization` and `XULLocalization` extend `Localization` and provide
-     * `document`-specific methods for sanitizing translations containing markup
-     * before they're inserted into the DOM.
-     */
-
-    var Localization = function () {
-
-      /**
-       * Create an instance of the `Localization` class.
-       *
-       * The instance's configuration is provided by two runtime-dependent
-       * functions passed to the constructor.
-       *
-       * The `requestBundles` function takes an array of language codes and returns
-       * a Promise of an array of lazy `ResourceBundle` instances.  The
-       * `Localization` instance will imediately call the `fetch` method of the
-       * first bundle returned by `requestBundles` and may call `fetch` on
-       * subsequent bundles in fallback scenarios.
-       *
-       * The array of bundles is the de-facto current fallback chain of languages
-       * and fetch locations.
-       *
-       * The `createContext` function takes a language code and returns an instance
-       * of `Intl.MessageContext`.  Since it's also provided to the constructor by
-       * the runtime it may pass runtime-specific `functions` to the
-       * `MessageContext` instances it creates.
-       *
-       * @param   {Function}     requestBundles
-       * @param   {Function}     createContext
-       * @returns {Localization}
-       */
-      function Localization(requestBundles, createContext) {
-        _classCallCheck(this, Localization);
-
-        var createHeadContext = function createHeadContext(bundles) {
-          return createHeadContextWith(createContext, bundles);
-        };
-
-        // Keep `requestBundles` and `createHeadContext` private.
-        properties.set(this, {
-          requestBundles: requestBundles, createHeadContext: createHeadContext
-        });
-
-        /**
-         * A Promise which resolves when the `Localization` instance has fetched
-         * and parsed all localization resources in the user's first preferred
-         * language (if available).
-         *
-         *     localization.interactive.then(callback);
-         */
-        this.interactive = requestBundles().then(
-        // Create a `MessageContext` for the first bundle right away.
-        function (bundles) {
-          return createHeadContext(bundles).then(
-          // Force `this.interactive` to resolve to the list of bundles.
-          function () {
-            return bundles;
-          });
-        });
-      }
-
-      /**
-       * Initiate the change of the currently negotiated languages.
-       *
-       * `requestLanguages` takes an array of language codes representing user's
-       * updated language preferences.
-       *
-       * @param   {Array<string>}     requestedLangs
-       * @returns {Promise<Array<ResourceBundle>>}
-       */
-
-
-      Localization.prototype.requestLanguages = function requestLanguages(requestedLangs) {
-        var _properties$get = properties.get(this),
-            requestBundles = _properties$get.requestBundles,
-            createHeadContext = _properties$get.createHeadContext;
-
-        // Assign to `this.interactive` to make all translations requested after
-        // the language change request come from the new fallback chain.
-
-
-        return this.interactive = Promise.all(
-        // Get the current bundles to be able to compare them to the new result
-        // of the language negotiation.
-        [this.interactive, requestBundles(requestedLangs)]).then(function (_ref26) {
-          var oldBundles = _ref26[0],
-              newBundles = _ref26[1];
-
-          if (equal(oldBundles, newBundles)) {
-            return oldBundles;
-          }
-
-          return createHeadContext(newBundles).then(function () {
-            return newBundles;
-          });
-        });
-      };
-
-      /**
-       * Format translations and handle fallback if needed.
-       *
-       * Format translations for `keys` from `MessageContext` instances
-       * corresponding to the current bundles.  In case of errors, fetch the next
-       * bundle in the fallback chain, create a context for it, and recursively
-       * call `formatWithFallback` again.
-       *
-       * @param   {Array<ResourceBundle>} bundles - Current bundles.
-       * @param   {Array<Array>}          keys    - Translation keys to format.
-       * @param   {Function}              method  - Formatting function.
-       * @param   {Array<string>}         [prev]  - Previous translations.
-       * @returns {Array<string> | Promise<Array<string>>}
-       * @private
-       */
-
-
-      Localization.prototype.formatWithFallback = function formatWithFallback(bundles, ctx, keys, method, prev) {
-        var _this15 = this;
-
-        // If a context for the head bundle doesn't exist we've reached the last
-        // bundle in the fallback chain.  This is the end condition which returns
-        // the translations formatted during the previous (recursive) calls to
-        // `formatWithFallback`.
-        if (!ctx && prev) {
-          return prev.translations;
-        }
-
-        var current = method(ctx, keys, prev);
-
-        // `hasErrors` is a flag set by `keysFromContext` to notify about errors
-        // during the formatting.  We can't just check the `length` of the `errors`
-        // property because it is fixed and equal to the length of `keys`.
-        if (!current.hasErrors) {
-          return current.translations;
-        }
-
-        // In Gecko `console` needs to imported explicitly.
-        if (typeof console !== 'undefined') {
-          // The `errors` property is an array of arrays, each containing all
-          // errors encountered for the translation at the same position in `keys`.
-          // If there were no errors for a given translation, `errors` will contain
-          // an `undefined` instead of the array of errors.  Most translations are
-          // simple string which don't produce errors.
-          current.errors.forEach(function (errs) {
-            return errs ? errs.forEach(function (e) {
-              return console.warn(e);
-            } // eslint-disable-line no-console
-            ) : null;
-          });
-        }
-
-        // At this point we need to fetch the next bundle in the fallback chain and
-        // create a `MessageContext` instance for it.
-        var tailBundles = bundles.slice(1);
-
-        var _properties$get2 = properties.get(this),
-            createHeadContext = _properties$get2.createHeadContext;
-
-        return createHeadContext(tailBundles).then(function (next) {
-          return _this15.formatWithFallback(tailBundles, next, keys, method, current);
-        });
-      };
-
-      /**
-       * Format translations into {value, attrs} objects.
-       *
-       * This is an internal method used by `LocalizationObserver` instances.  The
-       * fallback logic is the same as in `formatValues` but the argument type is
-       * stricter (an array of arrays) and it returns {value, attrs} objects which
-       * are suitable for the translation of DOM elements.
-       *
-       *     document.l10n.formatEntities([j
-       *       ['hello', { who: 'Mary' }],
-       *       ['welcome', undefined]
-       *     ]).then(console.log);
-       *
-       *     // [
-       *     //   { value: 'Hello, Mary!', attrs: null },
-       *     //   { value: 'Welcome!', attrs: { title: 'Hello' } }
-       *     // ]
-       *
-       * Returns a Promise resolving to an array of the translation strings.
-       *
-       * @param   {Array<Array>} keys
-       * @returns {Promise<Array<{value: string, attrs: Object}>>}
-       * @private
-       */
-
-
-      Localization.prototype.formatEntities = function formatEntities(keys) {
-        var _this16 = this;
-
-        return this.interactive.then(function (bundles) {
-          return _this16.formatWithFallback(bundles, contexts.get(bundles[0]), keys, entitiesFromContext);
-        });
-      };
-
-      /**
-       * Retrieve translations corresponding to the passed keys.
-       *
-       * A generalized version of `Localization.formatValue`.  Keys can either be
-       * simple string identifiers or `[id, args]` arrays.
-       *
-       *     document.l10n.formatValues(
-       *       ['hello', { who: 'Mary' }],
-       *       ['hello', { who: 'John' }],
-       *       'welcome'
-       *     ).then(console.log);
-       *
-       *     // ['Hello, Mary!', 'Hello, John!', 'Welcome!']
-       *
-       * Returns a Promise resolving to an array of the translation strings.
-       *
-       * @param   {...(Array | string)} keys
-       * @returns {Promise<Array<string>>}
-       */
-
-
-      Localization.prototype.formatValues = function formatValues() {
-        var _this17 = this;
-
-        for (var _len = arguments.length, keys = Array(_len), _key = 0; _key < _len; _key++) {
-          keys[_key] = arguments[_key];
-        }
-
-        // Convert string keys into arrays that `formatWithFallback` expects.
-        var keyTuples = keys.map(function (key) {
-          return Array.isArray(key) ? key : [key, null];
-        });
-        return this.interactive.then(function (bundles) {
-          return _this17.formatWithFallback(bundles, contexts.get(bundles[0]), keyTuples, valuesFromContext);
-        });
-      };
-
-      /**
-       * Retrieve the translation corresponding to the `id` identifier.
-       *
-       * If passed, `args` is a simple hash object with a list of variables that
-       * will be interpolated in the value of the translation.
-       *
-       *     localization.formatValue(
-       *       'hello', { who: 'world' }
-       *     ).then(console.log);
-       *
-       *     // 'Hello, world!'
-       *
-       * Returns a Promise resolving to the translation string.
-       *
-       * Use this sparingly for one-off messages which don't need to be
-       * retranslated when the user changes their language preferences, e.g. in
-       * notifications.
-       *
-       * @param   {string}  id     - Identifier of the translation to format
-       * @param   {Object}  [args] - Optional external arguments
-       * @returns {Promise<string>}
-       */
-
-
-      Localization.prototype.formatValue = function formatValue(id, args) {
-        return this.formatValues([id, args]).then(function (_ref27) {
-          var val = _ref27[0];
-          return val;
-        });
-      };
-
-      return Localization;
-    }();
-
-    var reHtml = /[&<>]/g;
-    var htmlEntities = {
-      '&': '&amp;',
-      '<': '&lt;',
-      '>': '&gt;'
-    };
-
-    // Unicode bidi isolation characters.
-    var FSI = '\u2068';
-    var PDI = '\u2069';var reOverlay = /<|&#?\w+;/;
-
-    var ns = 'http://www.w3.org/1999/xhtml';
-
-    var allowed = {
-      elements: ['a', 'em', 'strong', 'small', 's', 'cite', 'q', 'dfn', 'abbr', 'data', 'time', 'code', 'var', 'samp', 'kbd', 'sub', 'sup', 'i', 'b', 'u', 'mark', 'ruby', 'rt', 'rp', 'bdi', 'bdo', 'span', 'br', 'wbr'],
-      attributes: {
-        global: ['title', 'aria-label', 'aria-valuetext', 'aria-moz-hint'],
-        a: ['download'],
-        area: ['download', 'alt'],
-        // value is special-cased in isAttrAllowed
-        input: ['alt', 'placeholder'],
-        menuitem: ['label'],
-        menu: ['label'],
-        optgroup: ['label'],
-        option: ['label'],
-        track: ['label'],
-        img: ['alt'],
-        textarea: ['placeholder'],
-        th: ['abbr']
-      }
-    };
-
-    /**
-     * The HTML-specific Localization class.
-     *
-     * @extends Localization
-     *
-     */
-
-    var HTMLLocalization = function (_Localization) {
-      _inherits(HTMLLocalization, _Localization);
-
-      function HTMLLocalization() {
-        _classCallCheck(this, HTMLLocalization);
-
-        return _possibleConstructorReturn(this, _Localization.apply(this, arguments));
-      }
-
-      /**
-       * Overlay a DOM element using markup from a translation.
-       *
-       * @param {Element} element
-       * @param {string}  translation
-       * @private
-       */
-      HTMLLocalization.prototype.overlayElement = function overlayElement(element, translation) {
-        return _overlayElement(this, element, translation);
-      };
-
-      /**
-       * Check if element is allowed in this `Localization`'s document namespace.
-       *
-       * This method is used by the sanitizer when the translation markup contains
-       * an element which is not present in the source code.
-       *
-       * @param   {Element} element
-       * @returns {boolean}
-       * @private
-       */
-
-
-      HTMLLocalization.prototype.isElementAllowed = function isElementAllowed(element) {
-        // XXX The allowed list should be amendable; https://bugzil.la/922573.
-        return allowed.elements.indexOf(element.tagName.toLowerCase()) !== -1;
-      };
-
-      /**
-       * Check if attribute is allowed for the given element.
-       *
-       * This method is used by the sanitizer when the translation markup contains
-       * DOM attributes, or when the translation has traits which map to DOM
-       * attributes.
-       *
-       * @param   {{name: string}} attr
-       * @param   {Element}        element
-       * @returns {boolean}
-       * @private
-       */
-
-
-      HTMLLocalization.prototype.isAttrAllowed = function isAttrAllowed(attr, element) {
-        // Bail if it isn't even an HTML element.
-        if (element.namespaceURI !== ns) {
-          return false;
-        }
-
-        var attrName = attr.name.toLowerCase();
-        var tagName = element.tagName.toLowerCase();
-
-        // Is it a globally safe attribute?
-        if (allowed.attributes.global.indexOf(attrName) !== -1) {
-          return true;
-        }
-
-        // Are there no allowed attributes for this element?
-        if (!allowed.attributes[tagName]) {
-          return false;
-        }
-
-        // Is it allowed on this element?
-        // XXX The allowed list should be amendable; https://bugzil.la/922573
-        if (allowed.attributes[tagName].indexOf(attrName) !== -1) {
-          return true;
-        }
-
-        // Special case for value on inputs with type button, reset, submit
-        if (tagName === 'input' && attrName === 'value') {
-          var type = element.type.toLowerCase();
-          if (type === 'submit' || type === 'button' || type === 'reset') {
-            return true;
-          }
-        }
-
-        return false;
-      };
-
-      return HTMLLocalization;
-    }(Localization);
-
     var HTTP_STATUS_CODE_OK = 200;
 
     var ResourceBundle = function () {
@@ -3836,11 +3824,11 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
       }
 
       ResourceBundle.prototype.fetch = function fetch() {
-        var _this19 = this;
+        var _this18 = this;
 
         if (!this.loaded) {
           this.loaded = Promise.all(this.resIds.map(function (resId) {
-            return fetchResource(resId, _this19.lang);
+            return fetchResource(resId, _this18.lang);
           }));
         }
 
@@ -3850,7 +3838,7 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
       return ResourceBundle;
     }();
 
-    document.l10n = new ContentLocalizationObserver();
+    document.l10n = new LocalizationObserver();
     window.addEventListener('languagechange', document.l10n);
 
     documentReady().then(function () {
@@ -3859,20 +3847,20 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
           availableLangs = _getMeta.availableLangs;
 
       for (var _iterator14 = getResourceLinks(document.head), _isArray14 = Array.isArray(_iterator14), _i14 = 0, _iterator14 = _isArray14 ? _iterator14 : _iterator14[Symbol.iterator]();;) {
-        var _ref31;
+        var _ref32;
 
         if (_isArray14) {
           if (_i14 >= _iterator14.length) break;
-          _ref31 = _iterator14[_i14++];
+          _ref32 = _iterator14[_i14++];
         } else {
           _i14 = _iterator14.next();
           if (_i14.done) break;
-          _ref31 = _i14.value;
+          _ref32 = _i14.value;
         }
 
-        var _ref32 = _ref31,
-            name = _ref32[0],
-            resIds = _ref32[1];
+        var _ref33 = _ref32,
+            name = _ref33[0],
+            resIds = _ref33[1];
 
         if (!document.l10n.has(name)) {
           createLocalization(name, resIds, defaultLang, availableLangs);

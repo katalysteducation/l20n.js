@@ -2098,413 +2098,6 @@ function BestAvailableLocale(availableLocales, locale) {
   }
 }
 
-const observerConfig = {
-  attributes: true,
-  characterData: false,
-  childList: true,
-  subtree: true,
-  attributeFilter: ['data-l10n-id', 'data-l10n-args', 'data-l10n-bundle']
-};
-
-/**
- * The `LocalizationObserver` class is responsible for localizing DOM trees.
- * It also implements the iterable protocol which allows iterating over and
- * retrieving available `Localization` objects.
- *
- * Each `document` will have its corresponding `LocalizationObserver` instance
- * created automatically on startup, as `document.l10n`.
- */
-class LocalizationObserver {
-  /**
-   * @returns {LocalizationObserver}
-   */
-  constructor() {
-    this.localizations = new Map();
-    this.roots = new WeakMap();
-    this.observer = new MutationObserver(
-      mutations => this.translateMutations(mutations)
-    );
-  }
-
-  /**
-   * Test if the `Localization` object with a given name already exists.
-   *
-   * ```javascript
-   * if (document.l10n.has('extra')) {
-   *   const extraLocalization = document.l10n.get('extra');
-   * }
-   * ```
-   * @param   {string} name - key for the object
-   * @returns {boolean}
-   */
-  has(name) {
-    return this.localizations.has(name);
-  }
-
-  /**
-   * Retrieve a reference to the `Localization` object by name.
-   *
-   * ```javascript
-   * const mainLocalization = document.l10n.get('main');
-   * const extraLocalization = document.l10n.get('extra');
-   * ```
-   *
-   * @param   {string}        name - key for the object
-   * @returns {Localization}
-   */
-  get(name) {
-    return this.localizations.get(name);
-  }
-
-  /**
-   * Sets a reference to the `Localization` object by name.
-   *
-   * ```javascript
-   * const loc = new Localization();
-   * document.l10n.set('extra', loc);
-   * ```
-   *
-   * @param   {string}       name - key for the object
-   * @param   {Localization} value - `Localization` object
-   * @returns {LocalizationObserver}
-   */
-  set(name, value) {
-    this.localizations.set(name, value);
-    return this;
-  }
-
-  *[Symbol.iterator]() {
-    yield* this.localizations;
-  }
-
-  handleEvent() {
-    return this.requestLanguages();
-  }
-
-  /**
-   * Trigger the language negotation process with an array of language codes.
-   * Returns a promise with the negotiated array of language objects as above.
-   *
-   * ```javascript
-   * document.l10n.requestLanguages(['de-DE', 'de', 'en-US']);
-   * ```
-   *
-   * @param   {Array<string>} requestedLangs - array of requested languages
-   * @returns {Promise<Array<string>>}
-   */
-  requestLanguages(requestedLangs) {
-    const localizations = Array.from(this.localizations.values());
-    return Promise.all(
-      localizations.map(l10n => l10n.requestLanguages(requestedLangs))
-    ).then(
-      () => this.translateAllRoots()
-    )
-  }
-
-  /**
-   * Set the `data-l10n-id` and `data-l10n-args` attributes on DOM elements.
-   * L20n makes use of mutation observers to detect changes to `data-l10n-*`
-   * attributes and translate elements asynchronously.  `setAttributes` is
-   * a convenience method which allows to translate DOM elements declaratively.
-   *
-   * You should always prefer to use `data-l10n-id` on elements (statically in
-   * HTML or dynamically via `setAttributes`) over manually retrieving
-   * translations with `format`.  The use of attributes ensures that the
-   * elements can be retranslated when the user changes their language
-   * preferences.
-   *
-   * ```javascript
-   * document.l10n.setAttributes(
-   *   document.querySelector('#welcome'), 'hello', { who: 'world' }
-   * );
-   * ```
-   *
-   * This will set the following attributes on the `#welcome` element.  L20n's
-   * MutationObserver will pick up this change and will localize the element
-   * asynchronously.
-   *
-   * ```html
-   * <p id='welcome'
-   *   data-l10n-id='hello'
-   *   data-l10n-args='{"who": "world"}'>
-   * </p>
-   *
-   * @param {Element}             element - Element to set attributes on
-   * @param {string}                  id      - l10n-id string
-   * @param {Object<string, string>} args    - KVP list of l10n arguments
-   * ```
-   */
-  setAttributes(element, id, args) {
-    element.setAttribute('data-l10n-id', id);
-    if (args) {
-      element.setAttribute('data-l10n-args', JSON.stringify(args));
-    }
-    return element;
-  }
-
-  /**
-   * Get the `data-l10n-*` attributes from DOM elements.
-   *
-   * ```javascript
-   * document.l10n.getAttributes(
-   *   document.querySelector('#welcome')
-   * );
-   * // -> { id: 'hello', args: { who: 'world' } }
-   * ```
-   *
-   * @param   {Element}  element - HTML element
-   * @returns {{id: string, args: Object}}
-   */
-  getAttributes(element) {
-    return {
-      id: element.getAttribute('data-l10n-id'),
-      args: JSON.parse(element.getAttribute('data-l10n-args'))
-    };
-  }
-
-  /**
-   * Add a new root to the list of observed ones.
-   *
-   * @param {Element}      root - Root to observe.
-   * @param {Localization} l10n - `Localization` object
-   */
-  observeRoot(root, l10n = this.get('main')) {
-    if (!this.roots.has(l10n)) {
-      this.roots.set(l10n, new Set());
-    }
-    this.roots.get(l10n).add(root);
-    this.observer.observe(root, observerConfig);
-  }
-
-  /**
-   * Remove a root from the list of observed ones.
-   * If the root is the last to be associated with a given `Localization` object
-   * the `Localization` object association will also be removed.
-   *
-   * Returns `true` if the root was the last one associated with at least
-   * one `Localization` object.
-   *
-   * @param   {Element} root - Root to disconnect.
-   * @returns {boolean}
-   */
-  disconnectRoot(root) {
-    let wasLast = false;
-
-    this.pause();
-    for (const [name, l10n] of this.localizations) {
-      const roots = this.roots.get(l10n);
-      if (roots && roots.has(root)) {
-        roots.delete(root);
-        if (roots.size === 0) {
-          wasLast = true;
-          this.localizations.delete(name);
-          this.roots.delete(l10n);
-        }
-      }
-    }
-    this.resume();
-
-    return wasLast;
-  }
-
-  /**
-   * Pauses the `MutationObserver`
-   */
-  pause() {
-    this.observer.disconnect();
-  }
-
-  /**
-   * Resumes the `MutationObserver`
-   */
-  resume() {
-    for (const l10n of this.localizations.values()) {
-      if (this.roots.has(l10n)) {
-        for (const root of this.roots.get(l10n)) {
-          this.observer.observe(root, observerConfig)
-        }
-      }
-    }
-  }
-
-  /**
-   * Triggers translation of all roots associated with the
-   * `LocalizationObserver`.
-   *
-   * Returns a `Promise` which is resolved once all translations are
-   * completed.
-   *
-   * @returns {Promise}
-   */
-  translateAllRoots() {
-    const localizations = Array.from(this.localizations.values());
-    return Promise.all(
-      localizations.map(
-        l10n => this.translateRoots(l10n)
-      )
-    );
-  }
-
-  translateRoots(l10n) {
-    if (!this.roots.has(l10n)) {
-      return Promise.resolve();
-    }
-
-    const roots = Array.from(this.roots.get(l10n));
-    return Promise.all(
-      roots.map(root => this.translateRoot(root, l10n))
-    );
-  }
-
-  translateRoot(root, l10n) {
-    function setLangs() {
-      return l10n.interactive.then(bundles => {
-        const langs = bundles.map(bundle => bundle.lang);
-        const wasLocalizedBefore = root.hasAttribute('langs');
-
-        root.setAttribute('langs', langs.join(' '));
-        root.setAttribute('lang', langs[0]);
-        root.setAttribute('dir', getDirection(langs[0]));
-
-        if (wasLocalizedBefore) {
-          root.dispatchEvent(new CustomEvent('DOMRetranslated', {
-            bubbles: false,
-            cancelable: false,
-          }));
-        }
-      });
-    }
-
-    return this.translateRootContent(root).then(setLangs);
-  }
-
-  translateMutations(mutations) {
-    for (const mutation of mutations) {
-      switch (mutation.type) {
-        case 'attributes':
-          this.translateElement(mutation.target);
-          break;
-        case 'childList':
-          for (const addedNode of mutation.addedNodes) {
-            if (addedNode.nodeType === addedNode.ELEMENT_NODE) {
-              if (addedNode.childElementCount) {
-                this.translateFragment(addedNode);
-              } else if (addedNode.hasAttribute('data-l10n-id')) {
-                this.translateElement(addedNode);
-              }
-            }
-          }
-          break;
-      }
-    }
-  }
-
-  /**
-   * Translate a DOM node or fragment asynchronously.
-   *
-   * You can manually trigger translation (or re-translation) of a DOM fragment
-   * with `translateFragment`.  Use the `data-l10n-id` and `data-l10n-args`
-   * attributes to mark up the DOM with information about which translations to
-   * use.
-   *
-   * Returns a `Promise` that gets resolved once the translation is complete.
-   *
-   * @param   {DOMFragment} frag - DOMFragment to be translated
-   * @returns {Promise}
-   */
-  translateFragment(frag) {
-    return Promise.all(
-      this.groupTranslatablesByLocalization(frag).map(
-        elemsWithL10n => this.translateElements(
-          elemsWithL10n[0], elemsWithL10n[1]
-        )
-      )
-    );
-  }
-
-  translateElements(l10n, elements) {
-    if (!elements.length) {
-      return [];
-    }
-
-    const keys = elements.map(this.getKeysForElement);
-    return l10n.formatEntities(keys).then(
-      translations => this.applyTranslations(l10n, elements, translations)
-    );
-  }
-
-  /**
-   * Translates a single DOM node asynchronously.
-   *
-   * Returns a `Promise` that gets resolved once the translation is complete.
-   *
-   * @param   {Element} element - HTML element to be translated
-   * @returns {Promise}
-   */
-  translateElement(element) {
-    const l10n = this.get(element.getAttribute('data-l10n-bundle') || 'main');
-    return l10n.formatEntities([this.getKeysForElement(element)]).then(
-      translations => this.applyTranslations(l10n, [element], translations)
-    );
-  }
-
-  applyTranslations(l10n, elements, translations) {
-    this.pause();
-    for (let i = 0; i < elements.length; i++) {
-      l10n.overlayElement(elements[i], translations[i]);
-    }
-    this.resume();
-  }
-
-  groupTranslatablesByLocalization(frag) {
-    const elemsWithL10n = [];
-    for (const loc of this.localizations) {
-      elemsWithL10n.push(
-        [loc[1], this.getTranslatables(frag, loc[0])]
-      );
-    }
-    return elemsWithL10n;
-  }
-
-  getTranslatables(element, bundleName) {
-    const query = bundleName === 'main' ?
-      '[data-l10n-bundle="main"], [data-l10n-id]:not([data-l10n-bundle])' :
-      `[data-l10n-bundle=${bundleName}]`;
-    const nodes = Array.from(element.querySelectorAll(query));
-
-    if (typeof element.hasAttribute === 'function' &&
-        element.hasAttribute('data-l10n-id')) {
-      const elemBundleName = element.getAttribute('data-l10n-bundle');
-      if (elemBundleName === null || elemBundleName === bundleName) {
-        nodes.push(element);
-      }
-    }
-
-    return nodes;
-  }
-
-  getKeysForElement(element) {
-    return [
-      element.getAttribute('data-l10n-id'),
-      // In XUL documents missing attributes return `''` here which breaks
-      // JSON.parse.  HTML documents return `null`.
-      JSON.parse(element.getAttribute('data-l10n-args') || null)
-    ];
-  }
-}
-
-/**
- * The `ContentLocalizationObserver` is an extension of a `LocalizationObserver`
- * class which is used for all Web content.
- *
- * This class is used for all HTML content translations.
- */
-class ContentLocalizationObserver extends LocalizationObserver {
-  translateRootContent(root) {
-    return this.translateFragment(root);
-  }
-}
-
 /**
  * @private
  *
@@ -2643,7 +2236,9 @@ function entityFromContext(ctx, errors, id, args) {
     for (let i = 0, trait; (trait = entity.traits[i]); i++) {
       const attr = ctx.format(trait, args, errors);
       if (attr !== null) {
-        formatted.attrs[trait.key.name] = attr;
+        const key =
+          trait.key.ns ? `${trait.key.ns}/${trait.key.name}` : trait.key.name;
+        formatted.attrs[key] = attr;
       }
     }
   }
@@ -2670,10 +2265,6 @@ const contexts = new WeakMap();
  * Different names can be specified via the `name` attribute on the `<link>`
  * elements.  One `document` can have more than one `Localization` instance,
  * but one `Localization` instance can only be assigned to a single `document`.
- *
- * `HTMLLocalization` and `XULLocalization` extend `Localization` and provide
- * `document`-specific methods for sanitizing translations containing markup
- * before they're inserted into the DOM.
  */
 class Localization {
 
@@ -3027,15 +2618,59 @@ function valuesFromContext(ctx, keys, prev) {
 // &amp;, &#0038;, &#x0026;.
 const reOverlay = /<|&#?\w+;/;
 
+// XXX The allowed list should be amendable; https://bugzil.la/922573.
+const ALLOWED_ELEMENTS = {
+  'http://www.w3.org/1999/xhtml': [
+    'a', 'em', 'strong', 'small', 's', 'cite', 'q', 'dfn', 'abbr', 'data',
+    'time', 'code', 'var', 'samp', 'kbd', 'sub', 'sup', 'i', 'b', 'u',
+    'mark', 'ruby', 'rt', 'rp', 'bdi', 'bdo', 'span', 'br', 'wbr'
+  ],
+};
+
+const ALLOWED_ATTRIBUTES = {
+  'http://www.w3.org/1999/xhtml': {
+    global: ['title', 'aria-label', 'aria-valuetext', 'aria-moz-hint'],
+    a: ['download'],
+    area: ['download', 'alt'],
+    // value is special-cased in isAttrAllowed
+    input: ['alt', 'placeholder'],
+    menuitem: ['label'],
+    menu: ['label'],
+    optgroup: ['label'],
+    option: ['label'],
+    track: ['label'],
+    img: ['alt'],
+    textarea: ['placeholder'],
+    th: ['abbr']
+  },
+  'http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul': {
+    global: [
+      'accesskey', 'aria-label', 'aria-valuetext', 'aria-moz-hint', 'label'
+    ],
+    key: ['key', 'keycode'],
+    textbox: ['placeholder'],
+    toolbarbutton: ['tooltiptext'],
+  }
+};
+
+const DOM_NAMESPACES = {
+  'html': 'http://www.w3.org/1999/xhtml',
+  'xul': 'http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul',
+
+  // Reverse map for overlays.
+  'http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul': 'xul',
+  'http://www.w3.org/1999/xhtml': 'html',
+};
+
+
 /**
  * Overlay translation onto a DOM element.
  *
- * @param   {Localization} l10n
  * @param   {Element}      element
  * @param   {string}       translation
  * @private
  */
-function overlayElement(l10n, element, translation) {
+function overlayElement(element, translation) {
   const value = translation.value;
 
   if (typeof value === 'string') {
@@ -3049,13 +2684,15 @@ function overlayElement(l10n, element, translation) {
         'http://www.w3.org/1999/xhtml', 'template');
       tmpl.innerHTML = value;
       // Overlay the node with the DocumentFragment.
-      overlay(l10n, element, tmpl.content);
+      overlay(element, tmpl.content);
     }
   }
 
   for (const key in translation.attrs) {
-    if (l10n.isAttrAllowed({ name: key }, element)) {
-      element.setAttribute(key, translation.attrs[key]);
+    const [ns, name] =
+      key.includes('/') ? key.split('/', 2) : [null, key];
+    if (isAttrAllowed({ ns, name }, element)) {
+      element.setAttribute(name, translation.attrs[key]);
     }
   }
 }
@@ -3070,7 +2707,7 @@ function overlayElement(l10n, element, translation) {
 // attributes out and we don't want to break the Web by replacing elements to
 // which third-party code might have created references (e.g. two-way
 // bindings in MVC frameworks).
-function overlay(l10n, sourceElement, translationElement) {
+function overlay(sourceElement, translationElement) {
   const result = translationElement.ownerDocument.createDocumentFragment();
   let k, attr;
 
@@ -3090,15 +2727,15 @@ function overlay(l10n, sourceElement, translationElement) {
     const sourceChild = getNthElementOfType(sourceElement, childElement, index);
     if (sourceChild) {
       // There is a corresponding element in the source, let's use it.
-      overlay(l10n, sourceChild, childElement);
+      overlay(sourceChild, childElement);
       result.appendChild(sourceChild);
       continue;
     }
 
-    if (l10n.isElementAllowed(childElement)) {
+    if (isElementAllowed(childElement)) {
       const sanitizedChild = childElement.ownerDocument.createElement(
         childElement.nodeName);
-      overlay(l10n, sanitizedChild, childElement);
+      overlay(sanitizedChild, childElement);
       result.appendChild(sanitizedChild);
       continue;
     }
@@ -3120,11 +2757,85 @@ function overlay(l10n, sourceElement, translationElement) {
   // cleared if a new language doesn't use them; https://bugzil.la/922577
   if (translationElement.attributes) {
     for (k = 0, attr; (attr = translationElement.attributes[k]); k++) {
-      if (l10n.isAttrAllowed(attr, sourceElement)) {
+      if (isAttrAllowed({
+        ns: DOM_NAMESPACES[translationElement.namespaceURI],
+        name: attr.name
+      }, sourceElement)) {
         sourceElement.setAttribute(attr.name, attr.value);
       }
     }
   }
+}
+
+/**
+ * Check if element is allowed in the translation.
+ *
+ * This method is used by the sanitizer when the translation markup contains
+ * an element which is not present in the source code.
+ *
+ * @param   {Element} element
+ * @returns {boolean}
+ * @private
+ */
+function isElementAllowed(element) {
+  const allowed = ALLOWED_ELEMENTS[element.namespaceURI];
+  if (!allowed) {
+    return false;
+  }
+
+  return allowed.indexOf(element.tagName.toLowerCase()) !== -1;
+}
+
+/**
+ * Check if attribute is allowed for the given element.
+ *
+ * This method is used by the sanitizer when the translation markup contains
+ * DOM attributes, or when the translation has traits which map to DOM
+ * attributes.
+ *
+ * @param   {{name: string}} attr
+ * @param   {Element}        element
+ * @returns {boolean}
+ * @private
+ */
+function isAttrAllowed(attr, element) {
+  // Does it have a namespace that matches the element's?
+  if (attr.ns === null || DOM_NAMESPACES[attr.ns] !== element.namespaceURI) {
+    return false;
+  }
+  const allowed = ALLOWED_ATTRIBUTES[element.namespaceURI];
+  if (!allowed) {
+    return false;
+  }
+
+  const attrName = attr.name.toLowerCase();
+  const elemName = element.tagName.toLowerCase();
+
+  // Is it a globally safe attribute?
+  if (allowed.global.indexOf(attrName) !== -1) {
+    return true;
+  }
+
+  // Are there no allowed attributes for this element?
+  if (!allowed[elemName]) {
+    return false;
+  }
+
+  // Is it allowed on this element?
+  if (allowed[elemName].indexOf(attrName) !== -1) {
+    return true;
+  }
+
+  // Special case for value on HTML inputs with type button, reset, submit
+  if (element.namespaceURI === 'http://www.w3.org/1999/xhtml' &&
+      elemName === 'input' && attrName === 'value') {
+    const type = element.type.toLowerCase();
+    if (type === 'submit' || type === 'button' || type === 'reset') {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 // Get n-th immediate child of context that is of the same type as element.
@@ -3157,112 +2868,411 @@ function getIndexOfType(element) {
   return index;
 }
 
-const ns = 'http://www.w3.org/1999/xhtml';
-
-const allowed = {
-  elements: [
-    'a', 'em', 'strong', 'small', 's', 'cite', 'q', 'dfn', 'abbr', 'data',
-    'time', 'code', 'var', 'samp', 'kbd', 'sub', 'sup', 'i', 'b', 'u',
-    'mark', 'ruby', 'rt', 'rp', 'bdi', 'bdo', 'span', 'br', 'wbr'
-  ],
-  attributes: {
-    global: ['title', 'aria-label', 'aria-valuetext', 'aria-moz-hint'],
-    a: ['download'],
-    area: ['download', 'alt'],
-    // value is special-cased in isAttrAllowed
-    input: ['alt', 'placeholder'],
-    menuitem: ['label'],
-    menu: ['label'],
-    optgroup: ['label'],
-    option: ['label'],
-    track: ['label'],
-    img: ['alt'],
-    textarea: ['placeholder'],
-    th: ['abbr']
-  }
+const observerConfig = {
+  attributes: true,
+  characterData: false,
+  childList: true,
+  subtree: true,
+  attributeFilter: ['data-l10n-id', 'data-l10n-args', 'data-l10n-bundle']
 };
 
 /**
- * The HTML-specific Localization class.
+ * The `LocalizationObserver` class is responsible for localizing DOM trees.
+ * It also implements the iterable protocol which allows iterating over and
+ * retrieving available `Localization` objects.
  *
- * @extends Localization
- *
+ * Each `document` will have its corresponding `LocalizationObserver` instance
+ * created automatically on startup, as `document.l10n`.
  */
-class HTMLLocalization extends Localization {
+class LocalizationObserver {
   /**
-   * Overlay a DOM element using markup from a translation.
-   *
-   * @param {Element} element
-   * @param {string}  translation
-   * @private
+   * @returns {LocalizationObserver}
    */
-  overlayElement(element, translation) {
-    return overlayElement(this, element, translation);
+  constructor() {
+    this.localizations = new Map();
+    this.roots = new WeakMap();
+    this.observer = new MutationObserver(
+      mutations => this.translateMutations(mutations)
+    );
   }
 
   /**
-   * Check if element is allowed in this `Localization`'s document namespace.
+   * Test if the `Localization` object with a given name already exists.
    *
-   * This method is used by the sanitizer when the translation markup contains
-   * an element which is not present in the source code.
-   *
-   * @param   {Element} element
+   * ```javascript
+   * if (document.l10n.has('extra')) {
+   *   const extraLocalization = document.l10n.get('extra');
+   * }
+   * ```
+   * @param   {string} name - key for the object
    * @returns {boolean}
-   * @private
    */
-  isElementAllowed(element) {
-    // XXX The allowed list should be amendable; https://bugzil.la/922573.
-    return allowed.elements.indexOf(element.tagName.toLowerCase()) !== -1;
+  has(name) {
+    return this.localizations.has(name);
   }
 
   /**
-   * Check if attribute is allowed for the given element.
+   * Retrieve a reference to the `Localization` object by name.
    *
-   * This method is used by the sanitizer when the translation markup contains
-   * DOM attributes, or when the translation has traits which map to DOM
-   * attributes.
+   * ```javascript
+   * const mainLocalization = document.l10n.get('main');
+   * const extraLocalization = document.l10n.get('extra');
+   * ```
    *
-   * @param   {{name: string}} attr
-   * @param   {Element}        element
-   * @returns {boolean}
-   * @private
+   * @param   {string}        name - key for the object
+   * @returns {Localization}
    */
-  isAttrAllowed(attr, element) {
-    // Bail if it isn't even an HTML element.
-    if (element.namespaceURI !== ns) {
-      return false;
+  get(name) {
+    return this.localizations.get(name);
+  }
+
+  /**
+   * Sets a reference to the `Localization` object by name.
+   *
+   * ```javascript
+   * const loc = new Localization();
+   * document.l10n.set('extra', loc);
+   * ```
+   *
+   * @param   {string}       name - key for the object
+   * @param   {Localization} value - `Localization` object
+   * @returns {LocalizationObserver}
+   */
+  set(name, value) {
+    this.localizations.set(name, value);
+    return this;
+  }
+
+  *[Symbol.iterator]() {
+    yield* this.localizations;
+  }
+
+  handleEvent() {
+    return this.requestLanguages();
+  }
+
+  /**
+   * Trigger the language negotation process with an array of language codes.
+   * Returns a promise with the negotiated array of language objects as above.
+   *
+   * ```javascript
+   * document.l10n.requestLanguages(['de-DE', 'de', 'en-US']);
+   * ```
+   *
+   * @param   {Array<string>} requestedLangs - array of requested languages
+   * @returns {Promise<Array<string>>}
+   */
+  requestLanguages(requestedLangs) {
+    const localizations = Array.from(this.localizations.values());
+    return Promise.all(
+      localizations.map(l10n => l10n.requestLanguages(requestedLangs))
+    ).then(
+      () => this.translateAllRoots()
+    )
+  }
+
+  /**
+   * Set the `data-l10n-id` and `data-l10n-args` attributes on DOM elements.
+   * L20n makes use of mutation observers to detect changes to `data-l10n-*`
+   * attributes and translate elements asynchronously.  `setAttributes` is
+   * a convenience method which allows to translate DOM elements declaratively.
+   *
+   * You should always prefer to use `data-l10n-id` on elements (statically in
+   * HTML or dynamically via `setAttributes`) over manually retrieving
+   * translations with `format`.  The use of attributes ensures that the
+   * elements can be retranslated when the user changes their language
+   * preferences.
+   *
+   * ```javascript
+   * document.l10n.setAttributes(
+   *   document.querySelector('#welcome'), 'hello', { who: 'world' }
+   * );
+   * ```
+   *
+   * This will set the following attributes on the `#welcome` element.  L20n's
+   * MutationObserver will pick up this change and will localize the element
+   * asynchronously.
+   *
+   * ```html
+   * <p id='welcome'
+   *   data-l10n-id='hello'
+   *   data-l10n-args='{"who": "world"}'>
+   * </p>
+   *
+   * @param {Element}             element - Element to set attributes on
+   * @param {string}                  id      - l10n-id string
+   * @param {Object<string, string>} args    - KVP list of l10n arguments
+   * ```
+   */
+  setAttributes(element, id, args) {
+    element.setAttribute('data-l10n-id', id);
+    if (args) {
+      element.setAttribute('data-l10n-args', JSON.stringify(args));
+    }
+    return element;
+  }
+
+  /**
+   * Get the `data-l10n-*` attributes from DOM elements.
+   *
+   * ```javascript
+   * document.l10n.getAttributes(
+   *   document.querySelector('#welcome')
+   * );
+   * // -> { id: 'hello', args: { who: 'world' } }
+   * ```
+   *
+   * @param   {Element}  element - HTML element
+   * @returns {{id: string, args: Object}}
+   */
+  getAttributes(element) {
+    return {
+      id: element.getAttribute('data-l10n-id'),
+      args: JSON.parse(element.getAttribute('data-l10n-args'))
+    };
+  }
+
+  /**
+   * Add a new root to the list of observed ones.
+   *
+   * @param {Element}      root - Root to observe.
+   * @param {Localization} l10n - `Localization` object
+   */
+  observeRoot(root, l10n = this.get('main')) {
+    if (!this.roots.has(l10n)) {
+      this.roots.set(l10n, new Set());
+    }
+    this.roots.get(l10n).add(root);
+    this.observer.observe(root, observerConfig);
+  }
+
+  /**
+   * Remove a root from the list of observed ones.
+   * If the root is the last to be associated with a given `Localization` object
+   * the `Localization` object association will also be removed.
+   *
+   * Returns `true` if the root was the last one associated with at least
+   * one `Localization` object.
+   *
+   * @param   {Element} root - Root to disconnect.
+   * @returns {boolean}
+   */
+  disconnectRoot(root) {
+    let wasLast = false;
+
+    this.pause();
+    for (const [name, l10n] of this.localizations) {
+      const roots = this.roots.get(l10n);
+      if (roots && roots.has(root)) {
+        roots.delete(root);
+        if (roots.size === 0) {
+          wasLast = true;
+          this.localizations.delete(name);
+          this.roots.delete(l10n);
+        }
+      }
+    }
+    this.resume();
+
+    return wasLast;
+  }
+
+  /**
+   * Pauses the `MutationObserver`
+   */
+  pause() {
+    this.observer.disconnect();
+  }
+
+  /**
+   * Resumes the `MutationObserver`
+   */
+  resume() {
+    for (const l10n of this.localizations.values()) {
+      if (this.roots.has(l10n)) {
+        for (const root of this.roots.get(l10n)) {
+          this.observer.observe(root, observerConfig)
+        }
+      }
+    }
+  }
+
+  /**
+   * Triggers translation of all roots associated with the
+   * `LocalizationObserver`.
+   *
+   * Returns a `Promise` which is resolved once all translations are
+   * completed.
+   *
+   * @returns {Promise}
+   */
+  translateAllRoots() {
+    const localizations = Array.from(this.localizations.values());
+    return Promise.all(
+      localizations.map(
+        l10n => this.translateRoots(l10n)
+      )
+    );
+  }
+
+  translateRoots(l10n) {
+    if (!this.roots.has(l10n)) {
+      return Promise.resolve();
     }
 
-    const attrName = attr.name.toLowerCase();
-    const tagName = element.tagName.toLowerCase();
+    const roots = Array.from(this.roots.get(l10n));
+    return Promise.all(
+      roots.map(root => this.translateRoot(root, l10n))
+    );
+  }
 
-    // Is it a globally safe attribute?
-    if (allowed.attributes.global.indexOf(attrName) !== -1) {
-      return true;
+  translateRoot(root, l10n) {
+    function setLangs() {
+      return l10n.interactive.then(bundles => {
+        const langs = bundles.map(bundle => bundle.lang);
+        const wasLocalizedBefore = root.hasAttribute('langs');
+
+        root.setAttribute('langs', langs.join(' '));
+        root.setAttribute('lang', langs[0]);
+        root.setAttribute('dir', getDirection(langs[0]));
+
+        if (wasLocalizedBefore) {
+          root.dispatchEvent(new CustomEvent('DOMRetranslated', {
+            bubbles: false,
+            cancelable: false,
+          }));
+        }
+      });
     }
 
-    // Are there no allowed attributes for this element?
-    if (!allowed.attributes[tagName]) {
-      return false;
+    return this.translateRootContent(root).then(setLangs);
+  }
+
+  translateRootContent(root) {
+    const anonChildren = document.getAnonymousNodes ?
+      document.getAnonymousNodes(root) : null;
+    if (!anonChildren) {
+      return this.translateFragment(root);
     }
 
-    // Is it allowed on this element?
-    // XXX The allowed list should be amendable; https://bugzil.la/922573
-    if (allowed.attributes[tagName].indexOf(attrName) !== -1) {
-      return true;
+    return Promise.all(
+      [root, ...anonChildren].map(node => this.translateFragment(node))
+    );
+  }
+
+  translateMutations(mutations) {
+    for (const mutation of mutations) {
+      switch (mutation.type) {
+        case 'attributes':
+          this.translateElement(mutation.target);
+          break;
+        case 'childList':
+          for (const addedNode of mutation.addedNodes) {
+            if (addedNode.nodeType === addedNode.ELEMENT_NODE) {
+              if (addedNode.childElementCount) {
+                this.translateFragment(addedNode);
+              } else if (addedNode.hasAttribute('data-l10n-id')) {
+                this.translateElement(addedNode);
+              }
+            }
+          }
+          break;
+      }
+    }
+  }
+
+  /**
+   * Translate a DOM node or fragment asynchronously.
+   *
+   * You can manually trigger translation (or re-translation) of a DOM fragment
+   * with `translateFragment`.  Use the `data-l10n-id` and `data-l10n-args`
+   * attributes to mark up the DOM with information about which translations to
+   * use.
+   *
+   * Returns a `Promise` that gets resolved once the translation is complete.
+   *
+   * @param   {DOMFragment} frag - DOMFragment to be translated
+   * @returns {Promise}
+   */
+  translateFragment(frag) {
+    return Promise.all(
+      this.groupTranslatablesByLocalization(frag).map(
+        elemsWithL10n => this.translateElements(
+          elemsWithL10n[0], elemsWithL10n[1]
+        )
+      )
+    );
+  }
+
+  translateElements(l10n, elements) {
+    if (!elements.length) {
+      return [];
     }
 
-    // Special case for value on inputs with type button, reset, submit
-    if (tagName === 'input' && attrName === 'value') {
-      const type = element.type.toLowerCase();
-      if (type === 'submit' || type === 'button' || type === 'reset') {
-        return true;
+    const keys = elements.map(this.getKeysForElement);
+    return l10n.formatEntities(keys).then(
+      translations => this.applyTranslations(elements, translations)
+    );
+  }
+
+  /**
+   * Translates a single DOM node asynchronously.
+   *
+   * Returns a `Promise` that gets resolved once the translation is complete.
+   *
+   * @param   {Element} element - HTML element to be translated
+   * @returns {Promise}
+   */
+  translateElement(element) {
+    const l10n = this.get(element.getAttribute('data-l10n-bundle') || 'main');
+    return l10n.formatEntities([this.getKeysForElement(element)]).then(
+      translations => this.applyTranslations([element], translations)
+    );
+  }
+
+  applyTranslations(elements, translations) {
+    this.pause();
+    for (let i = 0; i < elements.length; i++) {
+      overlayElement(elements[i], translations[i]);
+    }
+    this.resume();
+  }
+
+  groupTranslatablesByLocalization(frag) {
+    const elemsWithL10n = [];
+    for (const loc of this.localizations) {
+      elemsWithL10n.push(
+        [loc[1], this.getTranslatables(frag, loc[0])]
+      );
+    }
+    return elemsWithL10n;
+  }
+
+  getTranslatables(element, bundleName) {
+    const query = bundleName === 'main' ?
+      '[data-l10n-bundle="main"], [data-l10n-id]:not([data-l10n-bundle])' :
+      `[data-l10n-bundle=${bundleName}]`;
+    const nodes = Array.from(element.querySelectorAll(query));
+
+    if (typeof element.hasAttribute === 'function' &&
+        element.hasAttribute('data-l10n-id')) {
+      const elemBundleName = element.getAttribute('data-l10n-bundle');
+      if (elemBundleName === null || elemBundleName === bundleName) {
+        nodes.push(element);
       }
     }
 
-    return false;
+    return nodes;
   }
 
+  getKeysForElement(element) {
+    return [
+      element.getAttribute('data-l10n-id'),
+      // In XUL documents missing attributes return `''` here which breaks
+      // JSON.parse.  HTML documents return `null`.
+      JSON.parse(element.getAttribute('data-l10n-args') || null)
+    ];
+  }
 }
 
 const HTTP_STATUS_CODE_OK = 200;
@@ -3323,21 +3333,21 @@ class ResourceBundle {
 // A document.ready shim
 // https://github.com/whatwg/html/issues/127
 function documentReady() {
-  if (document.readyState !== 'loading') {
+  const rs = document.readyState;
+  if (rs === 'interactive' || rs === 'completed') {
     return Promise.resolve();
   }
 
-  return new Promise(resolve => {
-    document.addEventListener('readystatechange', function onrsc() {
-      document.removeEventListener('readystatechange', onrsc);
-      resolve();
-    });
-  });
+  return new Promise(
+    resolve => document.addEventListener(
+      'readystatechange', resolve, { once: true }
+    )
+  );
 }
 
-function getResourceLinks(head) {
+function getResourceLinks(elem) {
   return Array.prototype.map.call(
-    head.querySelectorAll('link[rel="localization"]'),
+    elem.querySelectorAll('link[rel="localization"]'),
     el => [el.getAttribute('href'), el.getAttribute('name') || 'main']
   ).reduce(
     (seq, [href, name]) => seq.set(name, (seq.get(name) || []).concat(href)),
@@ -3384,7 +3394,7 @@ function createContext(lang) {
   return new Intl.MessageContext(lang);
 }
 
-document.l10n = new ContentLocalizationObserver();
+document.l10n = new LocalizationObserver();
 window.addEventListener('languagechange', document.l10n);
 
 documentReady().then(() => {
@@ -3412,7 +3422,7 @@ function createLocalization(name, resIds, defaultLang, availableLangs) {
     return Promise.resolve(bundles);
   }
 
-  const l10n = new HTMLLocalization(requestBundles, createContext);
+  const l10n = new Localization(requestBundles, createContext);
   document.l10n.set(name, l10n);
 
   if (name === 'main') {

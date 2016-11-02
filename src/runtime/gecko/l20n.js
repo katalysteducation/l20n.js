@@ -1,8 +1,8 @@
-import { ChromeLocalizationObserver } from '../../lib/observer/chrome';
-import { XULLocalization } from '../../lib/dom/xul';
+import Localization from '../../lib/localization';
+import LocalizationObserver from '../../bindings/dom';
 
 import { ChromeResourceBundle } from './io';
-import { XULDocumentReady, getResourceLinks } from './util';
+import { documentReady, getResourceLinks } from '../web/util';
 
 Components.utils.import('resource://gre/modules/Services.jsm');
 Components.utils.import('resource://gre/modules/L10nRegistry.jsm');
@@ -43,14 +43,14 @@ function createContext(lang) {
 
 // Following is the initial running code of l20n.js
 
-// We create a new  `ChromeLocalizationObserver` and define an event listener
+// We create a new  `LocalizationObserver` and define an event listener
 // for `languagechange` on it.
-document.l10n = new ChromeLocalizationObserver();
+document.l10n = new LocalizationObserver();
 window.addEventListener('languagechange', document.l10n);
 
 // Next, we collect all l10n resource links, create new `Localization` objects
 // and bind them to the `LocalizationObserver` instance.
-for (const [name, resIds] of getResourceLinks(document)) {
+for (const [name, resIds] of getResourceLinks(document.head || document)) {
   if (!document.l10n.has(name)) {
     createLocalization(name, resIds);
   }
@@ -68,13 +68,13 @@ function createLocalization(name, resIds) {
     );
   }
 
-  const l10n = new XULLocalization(requestBundles, createContext);
+  const l10n = new Localization(requestBundles, createContext);
   document.l10n.set(name, l10n);
 
   if (name === 'main') {
     // When document is ready, we trigger it's localization and initialize
     // `MutationObserver` on the root.
-    XULDocumentReady().then(() => {
+    documentReady().then(() => {
       const rootElem = document.documentElement;
       document.l10n.observeRoot(rootElem, l10n);
       document.l10n.translateRoot(rootElem, l10n);

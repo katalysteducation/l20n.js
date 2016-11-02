@@ -2,8 +2,8 @@ import './polyfill';
 import '../../intl/polyfill';
 import { prioritizeLocales, PrioritizeLocales } from '../../intl/locale';
 
-import { ContentLocalizationObserver } from '../../lib/observer/content';
-import { HTMLLocalization } from '../../lib/dom/html';
+import Localization from '../../lib/localization';
+import LocalizationObserver from '../../bindings/dom';
 
 import { ResourceBundle } from './io';
 import { documentReady, getResourceLinks, getMeta } from './util';
@@ -12,7 +12,7 @@ function createContext(lang) {
   return new Intl.MessageContext(lang);
 }
 
-document.l10n = new ContentLocalizationObserver();
+document.l10n = new LocalizationObserver();
 window.addEventListener('languagechange', document.l10n);
 
 documentReady().then(() => {
@@ -40,7 +40,7 @@ function createLocalization(name, resIds, defaultLang, availableLangs) {
     return Promise.resolve(bundles);
   }
 
-  const l10n = new HTMLLocalization(requestBundles, createContext);
+  const l10n = new Localization(requestBundles, createContext);
   document.l10n.set(name, l10n);
 
   if (name === 'main') {

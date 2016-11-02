@@ -1,4 +1,5 @@
-import { getDirection } from '../../intl/locale';
+import { getDirection } from '../intl/locale';
+import overlayElement from './overlay';
 
 const observerConfig = {
   attributes: true,
@@ -16,7 +17,7 @@ const observerConfig = {
  * Each `document` will have its corresponding `LocalizationObserver` instance
  * created automatically on startup, as `document.l10n`.
  */
-export class LocalizationObserver {
+export default class LocalizationObserver {
   /**
    * @returns {LocalizationObserver}
    */
@@ -280,6 +281,18 @@ export class LocalizationObserver {
     return this.translateRootContent(root).then(setLangs);
   }
 
+  translateRootContent(root) {
+    const anonChildren = document.getAnonymousNodes ?
+      document.getAnonymousNodes(root) : null;
+    if (!anonChildren) {
+      return this.translateFragment(root);
+    }
+
+    return Promise.all(
+      [root, ...anonChildren].map(node => this.translateFragment(node))
+    );
+  }
+
   translateMutations(mutations) {
     for (const mutation of mutations) {
       switch (mutation.type) {
@@ -331,7 +344,7 @@ export class LocalizationObserver {
 
     const keys = elements.map(this.getKeysForElement);
     return l10n.formatEntities(keys).then(
-      translations => this.applyTranslations(l10n, elements, translations)
+      translations => this.applyTranslations(elements, translations)
     );
   }
 
@@ -346,14 +359,14 @@ export class LocalizationObserver {
   translateElement(element) {
     const l10n = this.get(element.getAttribute('data-l10n-bundle') || 'main');
     return l10n.formatEntities([this.getKeysForElement(element)]).then(
-      translations => this.applyTranslations(l10n, [element], translations)
+      translations => this.applyTranslations([element], translations)
     );
   }
 
-  applyTranslations(l10n, elements, translations) {
+  applyTranslations(elements, translations) {
     this.pause();
     for (let i = 0; i < elements.length; i++) {
-      l10n.overlayElement(elements[i], translations[i]);
+      overlayElement(elements[i], translations[i]);
     }
     this.resume();
   }

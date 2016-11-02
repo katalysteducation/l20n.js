@@ -152,7 +152,9 @@ function entityFromContext(ctx, errors, id, args) {
     for (let i = 0, trait; (trait = entity.traits[i]); i++) {
       const attr = ctx.format(trait, args, errors);
       if (attr !== null) {
-        formatted.attrs[trait.key.name] = attr;
+        const key =
+          trait.key.ns ? `${trait.key.ns}/${trait.key.name}` : trait.key.name;
+        formatted.attrs[key] = attr;
       }
     }
   }
@@ -179,10 +181,6 @@ const contexts = new WeakMap();
  * Different names can be specified via the `name` attribute on the `<link>`
  * elements.  One `document` can have more than one `Localization` instance,
  * but one `Localization` instance can only be assigned to a single `document`.
- *
- * `HTMLLocalization` and `XULLocalization` extend `Localization` and provide
- * `document`-specific methods for sanitizing translations containing markup
- * before they're inserted into the DOM.
  */
 class Localization {
 
@@ -532,224 +530,6 @@ function valuesFromContext(ctx, keys, prev) {
   return keysFromContext(valueFromContext, sanitizeArgs, ctx, keys, prev);
 }
 
-// Match the opening angle bracket (<) in HTML tags, and HTML entities like
-// &amp;, &#0038;, &#x0026;.
-const reOverlay = /<|&#?\w+;/;
-
-/**
- * Overlay translation onto a DOM element.
- *
- * @param   {Localization} l10n
- * @param   {Element}      element
- * @param   {string}       translation
- * @private
- */
-function overlayElement(l10n, element, translation) {
-  const value = translation.value;
-
-  if (typeof value === 'string') {
-    if (!reOverlay.test(value)) {
-      // If the translation doesn't contain any markup skip the overlay logic.
-      element.textContent = value;
-    } else {
-      // Else start with an inert template element and move its children into
-      // `element` but such that `element`'s own children are not replaced.
-      const tmpl = element.ownerDocument.createElementNS(
-        'http://www.w3.org/1999/xhtml', 'template');
-      tmpl.innerHTML = value;
-      // Overlay the node with the DocumentFragment.
-      overlay(l10n, element, tmpl.content);
-    }
-  }
-
-  for (const key in translation.attrs) {
-    if (l10n.isAttrAllowed({ name: key }, element)) {
-      element.setAttribute(key, translation.attrs[key]);
-    }
-  }
-}
-
-// The goal of overlay is to move the children of `translationElement`
-// into `sourceElement` such that `sourceElement`'s own children are not
-// replaced, but only have their text nodes and their attributes modified.
-//
-// We want to make it possible for localizers to apply text-level semantics to
-// the translations and make use of HTML entities. At the same time, we
-// don't trust translations so we need to filter unsafe elements and
-// attributes out and we don't want to break the Web by replacing elements to
-// which third-party code might have created references (e.g. two-way
-// bindings in MVC frameworks).
-function overlay(l10n, sourceElement, translationElement) {
-  const result = translationElement.ownerDocument.createDocumentFragment();
-  let k, attr;
-
-  // Take one node from translationElement at a time and check it against
-  // the allowed list or try to match it with a corresponding element
-  // in the source.
-  let childElement;
-  while ((childElement = translationElement.childNodes[0])) {
-    translationElement.removeChild(childElement);
-
-    if (childElement.nodeType === childElement.TEXT_NODE) {
-      result.appendChild(childElement);
-      continue;
-    }
-
-    const index = getIndexOfType(childElement);
-    const sourceChild = getNthElementOfType(sourceElement, childElement, index);
-    if (sourceChild) {
-      // There is a corresponding element in the source, let's use it.
-      overlay(l10n, sourceChild, childElement);
-      result.appendChild(sourceChild);
-      continue;
-    }
-
-    if (l10n.isElementAllowed(childElement)) {
-      const sanitizedChild = childElement.ownerDocument.createElement(
-        childElement.nodeName);
-      overlay(l10n, sanitizedChild, childElement);
-      result.appendChild(sanitizedChild);
-      continue;
-    }
-
-    // Otherwise just take this child's textContent.
-    result.appendChild(
-      translationElement.ownerDocument.createTextNode(
-        childElement.textContent));
-  }
-
-  // Clear `sourceElement` and append `result` which by this time contains
-  // `sourceElement`'s original children, overlayed with translation.
-  sourceElement.textContent = '';
-  sourceElement.appendChild(result);
-
-  // If we're overlaying a nested element, translate the allowed
-  // attributes; top-level attributes are handled in `overlayElement`.
-  // XXX Attributes previously set here for another language should be
-  // cleared if a new language doesn't use them; https://bugzil.la/922577
-  if (translationElement.attributes) {
-    for (k = 0, attr; (attr = translationElement.attributes[k]); k++) {
-      if (l10n.isAttrAllowed(attr, sourceElement)) {
-        sourceElement.setAttribute(attr.name, attr.value);
-      }
-    }
-  }
-}
-
-// Get n-th immediate child of context that is of the same type as element.
-// XXX Use querySelector(':scope > ELEMENT:nth-of-type(index)'), when:
-// 1) :scope is widely supported in more browsers and 2) it works with
-// DocumentFragments.
-function getNthElementOfType(context, element, index) {
-  let nthOfType = 0;
-  for (let i = 0, child; (child = context.children[i]); i++) {
-    if (child.nodeType === child.ELEMENT_NODE &&
-        child.tagName.toLowerCase() === element.tagName.toLowerCase()) {
-      if (nthOfType === index) {
-        return child;
-      }
-      nthOfType++;
-    }
-  }
-  return null;
-}
-
-// Get the index of the element among siblings of the same type.
-function getIndexOfType(element) {
-  let index = 0;
-  let child;
-  while ((child = element.previousElementSibling)) {
-    if (child.tagName === element.tagName) {
-      index++;
-    }
-  }
-  return index;
-}
-
-const ns = 'http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul';
-
-const allowed = {
-  attributes: {
-    global: [
-      'accesskey', 'aria-label', 'aria-valuetext', 'aria-moz-hint', 'label'
-    ],
-    key: ['key', 'keycode'],
-    textbox: ['placeholder'],
-    toolbarbutton: ['tooltiptext'],
-  }
-};
-
-/**
- * The XUL-specific Localization class.
- *
- * @extends Localization
- *
- */
-class XULLocalization extends Localization {
-  /**
-   * Overlay a DOM element using markup from a translation.
-   *
-   * @param {Element} element
-   * @param {string}  translation
-   * @private
-   */
-  overlayElement(element, translation) {
-    return overlayElement(this, element, translation);
-  }
-
-  /**
-   * Check if element is allowed in this `Localization`'s document namespace.
-   *
-   * Always returns `false` for XUL elements.
-   *
-   * @returns {boolean}
-   * @private
-   */
-  isElementAllowed() {
-    return false;
-  }
-
-  /**
-   * Check if attribute is allowed for the given element.
-   *
-   * This method is used by the sanitizer when the translation markup contains
-   * DOM attributes, or when the translation has traits which map to DOM
-   * attributes.
-   *
-   * @param   {{name: string}} attr
-   * @param   {Element}        element
-   * @returns {boolean}
-   * @private
-   */
-  isAttrAllowed(attr, element) {
-    // Bail if it isn't even a XUL element.
-    if (element.namespaceURI !== ns) {
-      return false;
-    }
-
-    const tagName = element.localName;
-    const attrName = attr.name;
-
-    // Is it a globally safe attribute?
-    if (allowed.attributes.global.indexOf(attrName) !== -1) {
-      return true;
-    }
-
-    // Are there no allowed attributes for this element?
-    if (!allowed.attributes[tagName]) {
-      return false;
-    }
-
-    // Is it allowed on this element?
-    // XXX The allowed list should be amendable; https://bugzil.la/922573
-    if (allowed.attributes[tagName].indexOf(attrName) !== -1) {
-      return true;
-    }
-
-    return false;
-  }
-}
-
 class ChromeResourceBundle {
   constructor(lang, resources) {
     this.lang = lang;
@@ -822,7 +602,7 @@ function createLocalization(name, resIds, host, obs) {
       );
     }
 
-    const l10n = new XULLocalization(requestBundles, createContext);
+    const l10n = new Localization(requestBundles, createContext);
     obs.set(name, l10n);
   }
 

@@ -2,11 +2,15 @@
 The Guide To The FTL Syntax
 ===========================
 
-FTL is an open source, localization-specific scripting language used to process 
-gender, plurals, conjugations, and most of the other quirky elements of natural 
-language.
+FTL is a localization file format used for describing translation resources.
 
-The following chapters will demonstrate how to use FTL to solve localization 
+Software refers to the messages in a given language through unique identifiers.
+
+FTL is designed to be simple to read, but at the same time allows to represent
+complex concepts from natural languages like gender, plurals, conjugations,
+and others.
+
+The following chapters will demonstrate how to use FTL to solve localization
 challenges. Each chapter contains a hands-on example of simple FTL concepts.
 
 
@@ -17,20 +21,14 @@ Hello World
 
     hello = Hello, World!
 
-This is an entity called ``hello``. Entities are containers for information. 
-You use entities to identify, store, and recall information to be used in the 
+This is an entity called ``hello``. Entities are containers for information.
+You use entities to identify, store, and recall information to be used in the
 software's UI.
 
-In its simplest form, an entity stores a value; here it's a string, *Hello, 
-World!*. Most of the entities you will work with in FTL will look similar to 
-this. Some will be more complex, have more than one value variant, or use 
+In its simplest form, an entity has just a single string value; here *Hello,
+World!*. Most of the entities you will work with in FTL will look similar to
+this. Some will be more complex, have more than one value variant, or use
 expressions to select the right variant depending on the circumstances.
-
-How does the information stored in an entity end up on the user's screen and in 
-the UI? FTL operates in self-contained instances called "contexts". Each 
-context stores information about languages available to it, downloaded resource 
-files and all entities in these resource files. Software developers can create 
-contexts and query them for values of specific entities.
 
 
 Working With Text: Multiline, Quote Delimited Strings
@@ -45,18 +43,42 @@ Working With Text: Multiline, Quote Delimited Strings
         | It uses FTL to implement localization.
     more-info     =   "  Read more about us! "
 
-FTL entities mostly store string values. A string is a sequence of characters 
-that you can assign to an entity, store, and retrieve.
+The value of an FTL entity is usually a simple string.
 
-By default, a string begins after a ``=`` and ends with the end of line.  You 
-can also define easy-to-read, multiline strings with a pipe operator, as can be 
+By default, a string begins after a ``=`` and ends with the end of line.  You
+can also define easy-to-read, multiline strings with a pipe mark-up, as can be
 seen in the ``description`` entity.
 
-In almost all cases, leading and trailing spaces are not meaningful and will be 
-ignored allowing you to align the string id and values in a resource file for 
-better readability.  In a rare cases where leading and/or trailing spaces are 
-meaningful, FTL allows for special quote delimited strings as can be seen in 
+FTL ignores leading whitespaces in front of the value allowing localizers to
+align their messages for readability.
+For multiline strings, whitespaces both before and after the pipe are ignored.
+In rare cases where leading whitespaces should be part of the value, FTL allows
+for special quote delimited strings as can be seen in
 the ``more-info`` entity.
+
+
+Entity References
+=================
+
+::
+
+    brandName = Loki
+    installing = Installing { brandName }.
+
+    menu-save = Save
+    help-menu-save = Click "{ menu-save }" to save the file.
+
+Strings in FTL may use special syntax to incorporate small pieces of
+programmable interface. Those pieces are denoted with curly braces ``{`` and
+``}`` and are called placeables.
+
+One example of a placeable is a reference to another entity.
+
+Referencing other entities generally helps to keep certain translations
+consistent across the interface and makes maintenance easier.  It is also
+particularly handy for keeping branding separated from the rest of the
+translations, so that it can be changed easily when needed, e.g. during the
+build process of the application.
 
 
 Interpolation and External Arguments
@@ -74,17 +96,16 @@ Interpolation and External Arguments
         "emailCount": 5
     }
 
-In FTL strings may use special syntax to incorporate small pieces of 
-programmable interface. Those pieces are denoted with curly braces ``{`` and 
-``}`` and are called placeables.  The most common use case for a placeable is 
-to put an external argument, provided by the developer, into the string.
 
-There are all kinds of external data that might be useful in providing a good 
-localization: user names, number of unread messages, battery level, current 
+Another common common use case for a placeable is to put an external argument,
+provided by the developer, into the string.
+
+There are all kinds of external data that might be useful in providing a good
+localization: user names, number of unread messages, battery level, current
 time, time left before an alarm goes off, etc.
 
-To reference a context data variable, use the dollar syntax in your FTL code: 
-``$user``. ``user`` has to be defined in the context data. In the examples 
+To reference a context data variable, use the dollar syntax in your FTL code:
+``$user``. ``user`` has to be defined in the context data. In the examples
 below, we insert the value of a context data variable into an entity's value.
 
 
@@ -106,42 +127,21 @@ Builtins
         "unreadEmails": 5
     }
 
-In some rare cases the data provided by the developer will require some 
-additional formatting before it can be placed into the string.  FTL provides 
-a list of built-in functions that can help with common operations on the 
+In some rare cases the data provided by the developer will require some
+additional formatting before it can be placed into the string.  FTL provides
+a list of built-in functions that can help with common operations on the
 external arguments.
 
-By default, FTL can guess which formatter to run on each kind of argument: 
-``DATE``, ``NUMBER``, ``LIST`` etc., but you can also call the builtin 
+By default, FTL can guess which formatter to run on each kind of argument:
+``DATE``, ``NUMBER``, ``LIST`` etc., but you can also call the builtin
 explicitly.
 
-Explicit calls are useful because they allow you to pass 
-additional formatting options that may help make the formatted string look 
-better in the given language. Examples may be defining month as ``short`` or 
-``long`` in the ``DATE`` formatter (using arguments defined in 
-``Intl.DateTimeFormat``) or whether to use grouping separator when displaying 
+Explicit calls are useful because they allow you to pass
+additional formatting options that may help make the formatted string look
+better in the given language. Examples may be defining month as ``short`` or
+``long`` in the ``DATE`` formatter (using arguments defined in
+``Intl.DateTimeFormat``) or whether to use grouping separator when displaying
 a large number.
-
-
-Entity References
-=================
-
-::
-
-    brandName = Loki
-    installing = Installing { brandName }.
-
-    menu-save = Save
-    help-menu-save = Click "{ menu-save }" to save the file.
-
-Sometimes it may be useful to reference one entity from another. This generally 
-helps to keep certain translations consistent across the interface and makes 
-maintenance easier.  It is also particularly handy for keeping branding 
-separated from the rest of the translations, so that it can be changed easily 
-when needed, e.g. during the build process of the application.
-
-In l20n you can use the same ``{`` and ``}`` syntax to interpolate other 
-entities by their identifier.
 
 
 Selectors
@@ -160,15 +160,15 @@ Selectors
         "unreadEmails": 5
     }
 
-One of the most common cases when a localizer needs to use a placeable is when 
-there are multiple variants of the string that depend on some external 
+One of the most common cases when a localizer needs to use a placeable is when
+there are multiple variants of the string that depend on some external
 argument.
 
-FTL provides a select expression that chooses one of the provided variants 
+FTL provides a select expression that chooses one of the provided variants
 based on the given selector.
 
-By default, when a number is used as a selector, FTL implicitly uses ``PLURAL`` 
-formatter that selects the proper plural case for a given language. In English 
+By default, when a number is used as a selector, FTL implicitly uses ``PLURAL``
+formatter that selects the proper plural case for a given language. In English
 it will be either ``one`` or ``other``.
 
 
@@ -197,15 +197,15 @@ Advanced Selectors
         "unreadEmails": 0
     }
 
-Selectors are pretty powerful. A localizer can use any builtin explicitly and 
-select a string variant depending on its output. In case of the 
-``available-users`` entity, we used the ``LEN`` builtin and select the variant 
+Selectors are pretty powerful. A localizer can use any builtin explicitly and
+select a string variant depending on its output. In case of the
+``available-users`` entity, we used the ``LEN`` builtin and select the variant
 of the string depending on its output.
 
-Explicit values can be used in the ``PLURAL`` selector example to specify 
+Explicit values can be used in the ``PLURAL`` selector example to specify
 a special case for when there are no unread emails.
 
-Additionally, the code specifies the default variant to be used if none of the 
+Additionally, the code specifies the default variant to be used if none of the
 others match. It's denoted with a ``*`` operator in front of the variant name.
 
 
@@ -225,29 +225,29 @@ Variants
     about-old = O brskalniku { brand-nam }
     about = O { brand-name[locative] }
 
-As we stated at the beginning of this guide, an entity primarely consist 
-a string value. But there are cases, in which it makes sense to store multiple 
-variants of the value. The ``brand-name`` example, in languages that use noun 
+As we stated at the beginning of this guide, an entity primarely consist
+a string value. But there are cases, in which it makes sense to store multiple
+variants of the value. The ``brand-name`` example, in languages that use noun
 declension, may need to be declined when referred from other entities.
 
-Select expression, introduced in one of the previous chapters, does not provide 
-a way to easily refer to a particular variant of the value from another entity.  
-Instead, FTL lets you define traits, which are variants of the whole value that 
+Select expression, introduced in one of the previous chapters, does not provide
+a way to easily refer to a particular variant of the value from another entity.
+Instead, FTL lets you define traits, which are variants of the whole value that
 can be externally referred to using the ``key[trait]`` syntax.
 
-For instance, in many inflected languages (e.g. German, Finnish, Hungarian, all 
-Slavic languages), the *about* preposition governs the grammatical case of the 
-complement. It might be the accusative (German), ablative (Latin) or locative 
-(Slavic languages).  In Slovenian, the ideal string would inflect the noun, 
-like so: *O Aurori*.  However, since we want the name of the browser to be 
+For instance, in many inflected languages (e.g. German, Finnish, Hungarian, all
+Slavic languages), the *about* preposition governs the grammatical case of the
+complement. It might be the accusative (German), ablative (Latin) or locative
+(Slavic languages).  In Slovenian, the ideal string would inflect the noun,
+like so: *O Aurori*.  However, since we want the name of the browser to be
 stored in the ``brand-name`` entity, we can't modify it.
 
-The work-around is to inflect an auxiliary noun complement, e.g. browser, to 
-give *About the Aurora browser*. Needless to say, this ends up being long and 
-often unnaturally-sounding to the native speakers. See ``about-old`` for the 
+The work-around is to inflect an auxiliary noun complement, e.g. browser, to
+give *About the Aurora browser*. Needless to say, this ends up being long and
+often unnaturally-sounding to the native speakers. See ``about-old`` for the
 example in Slovenian.
 
-This problem can be easily solved by defining multiple variants of the 
+This problem can be easily solved by defining multiple variants of the
 ``brand-name`` entity, to match different grammatical cases of the noun.
 
 
@@ -264,11 +264,11 @@ Storing Additional Information
         [feminine] { brand-name } otworzyla nowe okno.
     }
 
-Traits are useful beyond just value variants. They can be also used to describe 
+Traits are useful beyond just value variants. They can be also used to describe
 parameters of the entity that can be then used in other selectors.
 
-Imagine an entity ``brand-name`` that can be either *Firefox* or *Aurora*.  The 
-former is *masculine*, while the latter is *feminine*, so sentences that refer 
+Imagine an entity ``brand-name`` that can be either *Firefox* or *Aurora*.  The
+former is *masculine*, while the latter is *feminine*, so sentences that refer
 to this entity may want to branch depending on the gender of it.
 
 
@@ -282,14 +282,14 @@ HTML/XUL Attributes
         [html/aria-label]  Login input value
         [html/title]       Type your login email
 
-Finally, traits can also be very useful when using FTL for localization of more 
+Finally, traits can also be very useful when using FTL for localization of more
 complex UI elements, such as HTML components.
 
-Those elements often contain multiple translatable messages per one widget. For 
-example, an HTML form input may have a value, but also a ``placeholder`` 
+Those elements often contain multiple translatable messages per one widget. For
+example, an HTML form input may have a value, but also a ``placeholder``
 attribute, ``aria-label`` attribute and maybe a ``title`` attribute.
 
-Another example would be a Web Component confirm window with an ``ok`` button, 
+Another example would be a Web Component confirm window with an ``ok`` button,
 ``cancel`` button and a message.
 
 
@@ -299,7 +299,7 @@ Sections
 ::
 
     instruction = Click "{ open }" to begin
-        
+
     [[menu]]
 
     open = Open
@@ -309,7 +309,7 @@ Sections
     undo = Undo
     search = Search
 
-Grouping entities that belong to a particular piece of UI is possible thanks to 
+Grouping entities that belong to a particular piece of UI is possible thanks to
 sections.
 
 
@@ -334,8 +334,8 @@ Comments
         "user": "mkablnik"
     }
 
-Comments in FTL can be either standalone or bound to an entity or section. If 
-a comment is located right above section or entity, it belongs to it and 
+Comments in FTL can be either standalone or bound to an entity or section. If
+a comment is located right above section or entity, it belongs to it and
 localization tools will present it in its context.
 
 
@@ -363,25 +363,34 @@ Complex Example
         "people": ["Anna", "Jack", "Mary", "Nick"]
     }
 
-Here's a final example. It's a pretty complex and one that you will interact 
-with very rarely, but it shows the power of a message that can be localized 
+Here's a final example. It's a pretty complex and one that you will interact
+with very rarely, but it shows the power of a message that can be localized
 really well thanks to the flexibility of the syntax.
 
-In this example we branch the string depending on the number of people passed 
-as an external argument up to three people, and then, if the number is higher, 
-we sum up the list and add the variant for one more person, or any number of 
+In this example we branch the string depending on the number of people passed
+as an external argument up to three people, and then, if the number is higher,
+we sum up the list and add the variant for one more person, or any number of
 people.
 
 This example is very sophisticated and in fact could be simplified like so::
 
     liked-photo = { LEN($people) } like your photo
 
-It would work well enough for English and could work for other languages 
+It would work well enough for English and could work for other languages
 without increasing its complexity.
 
-The power of FTL is that you can use the simple variant and then, later, you 
-can invest time to improve the message. If the message is very visible to the 
-users, it may be worth spending more time to get a better quality of the 
+The power of FTL is that you can use the simple variant and then, later, you
+can invest time to improve the message. If the message is very visible to the
+users, it may be worth spending more time to get a better quality of the
 string, if not, you can leave the simple version.
 
 But with FTL, you have a choice.
+
+Dive deeper
+===========
+
+You can experiment with the syntax using an interactive editor
+at http://l20n.github.io/tinker.
+If you are a tool author, you may be interested in the formal `EBNF grammar`_.
+
+.. _EBNF grammar: https://github.com/l20n/spec/blob/master/grammar.ebnf
