@@ -874,6 +874,10 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
     // A regexp to sanitize HTML tags and entities.
 
 
+    // Unicode bidi isolation characters.
+    //const FSI = '\u2068';
+    //const PDI = '\u2069';
+
     /**
      * Sanitize string-typed arguments.
      *
@@ -891,7 +895,7 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
           var value = _arg2.replace(reHtml, function (match) {
             return htmlEntities[match];
           });
-          args[name] = '' + FSI + value + PDI;
+          args[name] = value;
         }
       }
       return args;
@@ -2766,7 +2770,7 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
         var date = dateT[0].split('-');
         var time = dateT[1].split(':');
         arg = Date(date[0], date[1] - 1, date[2], time[0], time[1], parseInt(time[2]));
-        new FTLDateTime(arg.valueOf(), merge(arg.opts, opts));
+        return new FTLDateTime(arg.valueOf(), merge(arg.opts, opts));
       },
       'LIST': function LIST(args) {
         return FTLList.from(args);
@@ -3238,11 +3242,7 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
       '&': '&amp;',
       '<': '&lt;',
       '>': '&gt;'
-    };
-
-    // Unicode bidi isolation characters.
-    var FSI = '\u2068';
-    var PDI = '\u2069';var reOverlay = /<|&#?\w+;/;
+    };var reOverlay = /<|&#?\w+;/;
 
     // XXX The allowed list should be amendable; https://bugzil.la/922573.
     var ALLOWED_ELEMENTS = {

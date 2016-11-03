@@ -1424,7 +1424,7 @@ var builtins = {
     const time = dateT[1].split(':');
     arg = Date(date[0], date[1] - 1, date[2], time[0],
       time[1], parseInt(time[2]));
-    new FTLDateTime(arg.valueOf(), merge(arg.opts, opts));
+    return new FTLDateTime(arg.valueOf(), merge(arg.opts, opts));
   },
   'LIST': (args) => FTLList.from(args),
   'LEN': ([arg]) => new FTLNumber(arg.valueOf().length),

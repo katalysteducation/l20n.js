@@ -1423,7 +1423,7 @@ const builtins = {
     const time = dateT[1].split(':');
     arg = Date(date[0], date[1] - 1, date[2], time[0],
       time[1], parseInt(time[2]));
-    new FTLDateTime(arg.valueOf(), merge(arg.opts, opts));
+    return new FTLDateTime(arg.valueOf(), merge(arg.opts, opts));
   },
   'LIST': (args) => FTLList.from(args),
   'LEN': ([arg]) => new FTLNumber(arg.valueOf().length),
@@ -2421,8 +2421,8 @@ const htmlEntities = {
 };
 
 // Unicode bidi isolation characters.
-const FSI = '\u2068';
-const PDI = '\u2069';
+//const FSI = '\u2068';
+//const PDI = '\u2069';
 
 /**
  * Sanitize string-typed arguments.
@@ -2439,7 +2439,7 @@ function sanitizeArgs(args) {
     const arg = args[name];
     if (typeof arg === 'string') {
       const value = arg.replace(reHtml, match => htmlEntities[match]);
-      args[name] = `${FSI}${value}${PDI}`;
+      args[name] = value;
     }
   }
   return args;
