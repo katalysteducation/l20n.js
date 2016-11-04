@@ -550,7 +550,6 @@ class EntriesParser {
     if (ch !== '\n') {
       this.getEntity(entries);
     }
-    return;
   }
 
   getSection() {
@@ -622,7 +621,7 @@ class EntriesParser {
     } else {
       entries[id] = {
         val
-      }
+      };
     }
   }
 
@@ -839,7 +838,7 @@ class EntriesParser {
           throw this.error(
             `Too many placeables, maximum allowed is ${MAX_PLACEABLES}`);
         }
-        buffer = ''
+        buffer = '';
         content.push(this.getPlaceable());
         ch = this._source[this._index];
         placeables++;
@@ -1429,7 +1428,7 @@ var builtins = {
       time[1], parseInt(time[2]));
     return new FTLDateTime(arg.valueOf(), merge(arg.opts, opts));
   },
-  'LIST': (args) => FTLList.from(args),
+  'LIST': args => FTLList.from(args),
   'LEN': ([arg]) => new FTLNumber(arg.valueOf().length),
   'TAKE': ([num, arg]) => FTLList.from(arg.valueOf().slice(0, num.value)),
   'DROP': ([num, arg]) => FTLList.from(arg.valueOf().slice(num.value)),
@@ -1843,7 +1842,7 @@ class MessageContext {
    */
   constructor(lang, options = {}) {
     this.lang = lang;
-    this.functions = options.functions || {}
+    this.functions = options.functions || {};
     this.messages = new Map();
     this.intls = new WeakMap();
   }
@@ -1949,7 +1948,7 @@ if (!Intl.NumberFormat) {
         return n;
       }
     };
-  }
+  };
 }
 
 if (!Intl.PluralRules) {
@@ -1960,7 +1959,7 @@ if (!Intl.PluralRules) {
         return fn(n);
       }
     };
-  }
+  };
 }
 
 if (!Intl.ListFormat) {
@@ -1970,7 +1969,7 @@ if (!Intl.ListFormat) {
         return list.join(', ');
       }
     };
-  }
+  };
 }
 
 var serializer = {
@@ -2130,7 +2129,7 @@ var serializer = {
       return `${prefix}[${key}] ${value}`;
     }).join('\n');
   }
-}
+};
 
 class Node {
   constructor() {}
@@ -2684,7 +2683,7 @@ class Parser {
             `Too many placeables, maximum allowed is ${MAX_PLACEABLES$1}`);
         }
         source += buffer;
-        buffer = ''
+        buffer = '';
         const start = this._index;
         content.push(this.getPlaceable());
         source += this._source.substring(start, this._index);

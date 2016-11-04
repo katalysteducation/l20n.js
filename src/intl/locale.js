@@ -65,7 +65,7 @@ export function PrioritizeLocales(availableLocales,
     }
   }
 
-  for(let i = 0; i < result.length; i++) {
+  for (let i = 0; i < result.length; i++) {
     array = result[i].split('-');
     if (array.length === 2) {
       result[i] = `${array[0]} - ${array[1].toUpperCase()}`;

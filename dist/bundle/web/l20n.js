@@ -562,7 +562,6 @@ class EntriesParser {
     if (ch !== '\n') {
       this.getEntity(entries);
     }
-    return;
   }
 
   getSection() {
@@ -634,7 +633,7 @@ class EntriesParser {
     } else {
       entries[id] = {
         val
-      }
+      };
     }
   }
 
@@ -851,7 +850,7 @@ class EntriesParser {
           throw this.error(
             `Too many placeables, maximum allowed is ${MAX_PLACEABLES}`);
         }
-        buffer = ''
+        buffer = '';
         content.push(this.getPlaceable());
         ch = this._source[this._index];
         placeables++;
@@ -1441,7 +1440,7 @@ const builtins = {
       time[1], parseInt(time[2]));
     return new FTLDateTime(arg.valueOf(), merge(arg.opts, opts));
   },
-  'LIST': (args) => FTLList.from(args),
+  'LIST': args => FTLList.from(args),
   'LEN': ([arg]) => new FTLNumber(arg.valueOf().length),
   'TAKE': ([num, arg]) => FTLList.from(arg.valueOf().slice(0, num.value)),
   'DROP': ([num, arg]) => FTLList.from(arg.valueOf().slice(num.value)),
@@ -1855,7 +1854,7 @@ class MessageContext {
    */
   constructor(lang, options = {}) {
     this.lang = lang;
-    this.functions = options.functions || {}
+    this.functions = options.functions || {};
     this.messages = new Map();
     this.intls = new WeakMap();
   }
@@ -1961,7 +1960,7 @@ if (!Intl.NumberFormat) {
         return n;
       }
     };
-  }
+  };
 }
 
 if (!Intl.PluralRules) {
@@ -1972,7 +1971,7 @@ if (!Intl.PluralRules) {
         return fn(n);
       }
     };
-  }
+  };
 }
 
 if (!Intl.ListFormat) {
@@ -1982,7 +1981,7 @@ if (!Intl.ListFormat) {
         return list.join(', ');
       }
     };
-  }
+  };
 }
 
 function prioritizeLocales(def, availableLangs, requested) {
@@ -2052,7 +2051,7 @@ function PrioritizeLocales(availableLocales,
     }
   }
 
-  for(let i = 0; i < result.length; i++) {
+  for (let i = 0; i < result.length; i++) {
     array = result[i].split('-');
     if (array.length === 2) {
       result[i] = `${array[0]} - ${array[1].toUpperCase()}`;
@@ -2148,31 +2147,60 @@ function BestAvailableLocale(availableLocales, locale) {
  */
 function keysFromContext(method, sanitizeArgs, ctx, keys, prev) {
   const entityErrors = [];
-  const current = {
+  const result = {
     errors: new Array(keys.length),
-    hasErrors: false
+    withoutFatal: new Array(keys.length),
+    hasFatalErrors: false,
   };
 
-  current.translations = keys.map((key, i) => {
-    if (prev && !prev.errors[i]) {
-      // Use a previously formatted good value if there were no errors
+  result.translations = keys.map((key, i) => {
+    // Use a previously formatted good value if it had no errors.
+    if (prev && !prev.errors[i] ) {
       return prev.translations[i];
     }
 
+    // Clear last entity's errors.
+    entityErrors.length = 0;
     const args = sanitizeArgs(key[1]);
     const translation = method(ctx, entityErrors, key[0], args);
-    if (entityErrors.length) {
-      current.errors[i] = entityErrors.slice();
-      entityErrors.length = 0;
-      if (!current.hasErrors) {
-        current.hasErrors = true;
-      }
+
+    // No errors still? Use this translation as fallback to the previous one
+    // which had errors.
+    if (entityErrors.length === 0) {
+      return translation;
     }
 
+    // The rest of this function handles the scenario in which the translation
+    // was formatted with errors.  Copy the errors to the result object so that
+    // the Localization can handle them (e.g. console.warn about them).
+    result.errors[i] = entityErrors.slice();
+
+    // Formatting errors are not fatal and the translations are usually still
+    // usable and can be good fallback values.  Fatal errors should signal to
+    // the Localization that another fallback should be loaded.
+    if (!entityErrors.some(isL10nError)) {
+      result.withoutFatal[i] = true;
+    } else if (!result.hasFatalErrors) {
+      result.hasFatalErrors = true;
+    }
+
+    // Use the previous translation for this `key` even if it had formatting
+    // errors.  This is usually closer the user's preferred language anyways.
+    if (prev && prev.withoutFatal[i]) {
+      // Mark this previous translation as a good potential fallback value in
+      // case of further fallbacks.
+      result.withoutFatal[i] = true;
+      return prev.translations[i];
+    }
+
+    // If no good or almost good previous translation is available, return the
+    // current translation.  In case of minor errors it's a partially
+    // formatted translation.  In the worst-case scenario it an identifier of
+    // the requested entity.
     return translation;
   });
 
-  return current;
+  return result;
 }
 
 /**
@@ -2238,18 +2266,35 @@ function entityFromContext(ctx, errors, id, args) {
   };
 
   if (entity.traits) {
-    formatted.attrs = Object.create(null);
+    formatted.attrs = [];
     for (let i = 0, trait; (trait = entity.traits[i]); i++) {
+      if (!trait.key.hasOwnProperty('ns')) {
+        continue;
+      }
       const attr = ctx.format(trait, args, errors);
       if (attr !== null) {
-        const key =
-          trait.key.ns ? `${trait.key.ns}/${trait.key.name}` : trait.key.name;
-        formatted.attrs[key] = attr;
+        formatted.attrs.push([
+          trait.key.ns,
+          trait.key.name,
+          attr
+        ]);
       }
     }
   }
 
   return formatted;
+}
+
+/**
+ * @private
+ *
+ * Test if an error is an instance of L10nError.
+ *
+ * @param   {Error}   error
+ * @returns {boolean}
+ */
+function isL10nError(error) {
+  return error instanceof L10nError;
 }
 
 const properties = new WeakMap();
@@ -2348,7 +2393,7 @@ class Localization {
 
       return createHeadContext(newBundles).then(
         () => newBundles
-      )
+      );
     });
   }
 
@@ -2372,18 +2417,11 @@ class Localization {
     // bundle in the fallback chain.  This is the end condition which returns
     // the translations formatted during the previous (recursive) calls to
     // `formatWithFallback`.
-    if (!ctx && prev) {
+    if (!ctx) {
       return prev.translations;
     }
 
     const current = method(ctx, keys, prev);
-
-    // `hasErrors` is a flag set by `keysFromContext` to notify about errors
-    // during the formatting.  We can't just check the `length` of the `errors`
-    // property because it is fixed and equal to the length of `keys`.
-    if (!current.hasErrors) {
-      return current.translations;
-    }
 
     // In Gecko `console` needs to imported explicitly.
     if (typeof console !== 'undefined') {
@@ -2397,6 +2435,13 @@ class Localization {
           e => console.warn(e) // eslint-disable-line no-console
         ) : null
       );
+    }
+
+    // `hasFatalErrors` is a flag set by `keysFromContext` to notify about
+    // errors during the formatting.  We can't just check the `length` of the
+    // `errors` property because it is fixed and equal to the length of `keys`.
+    if (!current.hasFatalErrors) {
+      return current.translations;
     }
 
     // At this point we need to fetch the next bundle in the fallback chain and
@@ -2974,7 +3019,7 @@ class LocalizationObserver {
       localizations.map(l10n => l10n.requestLanguages(requestedLangs))
     ).then(
       () => this.translateAllRoots()
-    )
+    );
   }
 
   /**
@@ -3097,7 +3142,7 @@ class LocalizationObserver {
     for (const l10n of this.localizations.values()) {
       if (this.roots.has(l10n)) {
         for (const root of this.roots.get(l10n)) {
-          this.observer.observe(root, observerConfig)
+          this.observer.observe(root, observerConfig);
         }
       }
     }

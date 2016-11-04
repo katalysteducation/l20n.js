@@ -566,7 +566,7 @@ class Parser {
             `Too many placeables, maximum allowed is ${MAX_PLACEABLES}`);
         }
         source += buffer;
-        buffer = ''
+        buffer = '';
         const start = this._index;
         content.push(this.getPlaceable());
         source += this._source.substring(start, this._index);
