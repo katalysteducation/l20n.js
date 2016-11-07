@@ -1420,14 +1420,8 @@ var builtins = {
     new FTLNumber(arg.valueOf(), merge(arg.opts, opts)),
   'PLURAL': ([arg], opts) =>
     new FTLNumber(arg.valueOf(), merge(arg.opts, opts)),
-  'DATETIME': ([arg], opts) => {
-    const dateT = arg.split('T');
-    const date = dateT[0].split('-');
-    const time = dateT[1].split(':');
-    arg = Date(date[0], date[1] - 1, date[2], time[0],
-      time[1], parseInt(time[2]));
-    return new FTLDateTime(arg.valueOf(), merge(arg.opts, opts));
-  },
+  'DATETIME': ([arg], opts) =>
+    new FTLDateTime(arg.valueOf(), merge(arg.opts, opts)),
   'LIST': args => FTLList.from(args),
   'LEN': ([arg]) => new FTLNumber(arg.valueOf().length),
   'TAKE': ([num, arg]) => FTLList.from(arg.valueOf().slice(0, num.value)),

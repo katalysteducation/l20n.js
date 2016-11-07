@@ -2809,11 +2809,6 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
       },
       'DATETIME': function DATETIME(_ref3, opts) {
         var arg = _ref3[0];
-
-        var dateT = arg.split('T');
-        var date = dateT[0].split('-');
-        var time = dateT[1].split(':');
-        arg = Date(date[0], date[1] - 1, date[2], time[0], time[1], parseInt(time[2]));
         return new FTLDateTime(arg.valueOf(), merge(arg.opts, opts));
       },
       'LIST': function LIST(args) {
