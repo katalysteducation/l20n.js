@@ -25,10 +25,10 @@ documentReady().then(() => {
 });
 
 function createLocalization(name, resIds, defaultLang, availableLangs) {
-  const langs = PrioritizeLocales(availableLangs,navigator.languages.slice(),
-  defaultLang);
 
-  function requestBundles(requestedLangs = new Set(langs)) {
+  function requestBundles(
+    requestedLangs = new Set(PrioritizeLocales(availableLangs,
+      navigator.languages.slice(),defaultLang))) {
     const newLangs = prioritizeLocales(
       defaultLang, availableLangs, requestedLangs
     );

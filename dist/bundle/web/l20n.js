@@ -2048,7 +2048,7 @@ function PrioritizeLocales(availableLocales,
   for (let i = 0; i < result.length; i++) {
     array = result[i].split('-');
     if (array.length === 2) {
-      result[i] = `${array[0]} - ${array[1].toUpperCase()}`;
+      result[i] = `${array[0]}-${array[1].toUpperCase()}`;
     }
   }
 
@@ -3454,10 +3454,10 @@ documentReady().then(() => {
 });
 
 function createLocalization(name, resIds, defaultLang, availableLangs) {
-  const langs = PrioritizeLocales(availableLangs,navigator.languages.slice(),
-  defaultLang);
 
-  function requestBundles(requestedLangs = new Set(langs)) {
+  function requestBundles(
+    requestedLangs = new Set(PrioritizeLocales(availableLangs,
+      navigator.languages.slice(),defaultLang))) {
     const newLangs = prioritizeLocales(
       defaultLang, availableLangs, requestedLangs
     );
