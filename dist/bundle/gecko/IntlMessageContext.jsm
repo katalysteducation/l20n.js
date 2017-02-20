@@ -16,7 +16,7 @@ class L10nError extends Error {
   }
 }
 
-/*eslint no-magic-numbers: [0]*/
+/*  eslint no-magic-numbers: [0]  */
 
 const MAX_PLACEABLES = 100;
 
@@ -959,8 +959,6 @@ class FTLList extends Array {
 const builtins = {
   'NUMBER': ([arg], opts) =>
     new FTLNumber(arg.valueOf(), merge(arg.opts, opts)),
-  'PLURAL': ([arg], opts) =>
-    new FTLNumber(arg.valueOf(), merge(arg.opts, opts)),
   'DATETIME': ([arg], opts) =>
     new FTLDateTime(arg.valueOf(), merge(arg.opts, opts)),
   'LIST': args => FTLList.from(args),
@@ -1015,6 +1013,11 @@ function valuesOf(opts) {
 
 // Prevent expansion of too long placeables.
 const MAX_PLACEABLE_LENGTH = 2500;
+
+// Unicode bidi isolation characters.
+const FSI = '\u2068';
+const PDI = '\u2069';
+
 
 /**
  * Map an array of JavaScript values into FTL Values.
@@ -1307,7 +1310,8 @@ function Pattern(env, ptn) {
       const value = part.length === 1 ?
         Value(env, part[0]) : mapValues(env, part);
 
-      const str = value.toString(ctx);
+      let str = value.toString(ctx);
+
       if (str.length > MAX_PLACEABLE_LENGTH) {
         errors.push(
           new RangeError(
@@ -1315,7 +1319,11 @@ function Pattern(env, ptn) {
             `(${str.length}, max allowed is ${MAX_PLACEABLE_LENGTH})`
           )
         );
-        result += str.substr(0, MAX_PLACEABLE_LENGTH);
+        str = str.substr(0, MAX_PLACEABLE_LENGTH);
+      }
+
+      if (ctx.useIsolating) {
+        result += `${FSI}${str}${PDI}`;
       } else {
         result += str;
       }
@@ -1366,18 +1374,35 @@ class MessageContext {
    * The `lang` argument is used to instantiate `Intl` formatters used by
    * translations.  The `options` object can be used to configure the context.
    *
+   * Examples:
+   *
+   *     const ctx = new MessageContext(lang);
+   *
+   *     const ctx = new MessageContext(lang, { useIsolating: false });
+   *
+   *     const ctx = new MessageContext(lang, {
+   *       useIsolating: true,
+   *       functions: {
+   *         NODE_ENV: () => process.env.NODE_ENV
+   *       }
+   *     });
+   *
    * Available options:
    *
-   *   - functions - an object of additional functions available to
-   *                 translations as builtins.
+   *   - `functions` - an object of additional functions available to
+   *                   translations as builtins.
+   *
+   *   - `useIsolating` - boolean specifying whether to use Unicode isolation
+   *                    marks (FSI, PDI) for bidi interpolations.
    *
    * @param   {string} lang      - Language of the context.
    * @param   {Object} [options]
    * @returns {MessageContext}
    */
-  constructor(lang, options = {}) {
+  constructor(lang, { functions = {}, useIsolating = true } = {}) {
     this.lang = lang;
-    this.functions = options.functions || {};
+    this.functions = functions;
+    this.useIsolating = useIsolating;
     this.messages = new Map();
     this.intls = new WeakMap();
   }

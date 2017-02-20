@@ -9,7 +9,7 @@ describe('Referencing values', function(){
   let ctx, args, errs;
 
   before(function() {
-    ctx = new MessageContext('en-US');
+    ctx = new MessageContext('en-US', { useIsolating: false });
     ctx.addMessages(ftl`
       key1 = Value 1
       key2 = Value 2
@@ -28,6 +28,7 @@ describe('Referencing values', function(){
       key7 = Value { 7 }
           [a] A{ 7 }
           [b] B{ 7 }
+
       ref1 = { key1 }
       ref2 = { key2 }
       ref3 = { key3 }
@@ -35,10 +36,13 @@ describe('Referencing values', function(){
       ref5 = { key5 }
       ref6 = { key6 }
       ref7 = { key7 }
+
       ref8 = { key2[a] }
       ref9 = { key2[b] }
+
       ref10 = { key3[a] }
       ref11 = { key3[b] }
+
       ref12 = { key7[a] }
       ref13 = { key7[b] }
     `);

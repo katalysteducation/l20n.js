@@ -1,7 +1,7 @@
 var L20n = (function () {
 'use strict';
 
-/*eslint no-magic-numbers: [0]*/
+/*  eslint no-magic-numbers: [0]  */
 
 const locales2rules = {
   'af': 3,
@@ -472,7 +472,7 @@ class L10nError extends Error {
   }
 }
 
-/*eslint no-magic-numbers: [0]*/
+/*  eslint no-magic-numbers: [0]  */
 
 const MAX_PLACEABLES = 100;
 
@@ -1415,8 +1415,6 @@ class FTLList extends Array {
 var builtins = {
   'NUMBER': ([arg], opts) =>
     new FTLNumber(arg.valueOf(), merge(arg.opts, opts)),
-  'PLURAL': ([arg], opts) =>
-    new FTLNumber(arg.valueOf(), merge(arg.opts, opts)),
   'DATETIME': ([arg], opts) =>
     new FTLDateTime(arg.valueOf(), merge(arg.opts, opts)),
   'LIST': args => FTLList.from(args),
@@ -1471,6 +1469,11 @@ function valuesOf(opts) {
 
 // Prevent expansion of too long placeables.
 const MAX_PLACEABLE_LENGTH = 2500;
+
+// Unicode bidi isolation characters.
+const FSI = '\u2068';
+const PDI = '\u2069';
+
 
 /**
  * Map an array of JavaScript values into FTL Values.
@@ -1763,7 +1766,8 @@ function Pattern(env, ptn) {
       const value = part.length === 1 ?
         Value(env, part[0]) : mapValues(env, part);
 
-      const str = value.toString(ctx);
+      let str = value.toString(ctx);
+
       if (str.length > MAX_PLACEABLE_LENGTH) {
         errors.push(
           new RangeError(
@@ -1771,7 +1775,11 @@ function Pattern(env, ptn) {
             `(${str.length}, max allowed is ${MAX_PLACEABLE_LENGTH})`
           )
         );
-        result += str.substr(0, MAX_PLACEABLE_LENGTH);
+        str = str.substr(0, MAX_PLACEABLE_LENGTH);
+      }
+
+      if (ctx.useIsolating) {
+        result += `${FSI}${str}${PDI}`;
       } else {
         result += str;
       }
@@ -1822,18 +1830,35 @@ class MessageContext {
    * The `lang` argument is used to instantiate `Intl` formatters used by
    * translations.  The `options` object can be used to configure the context.
    *
+   * Examples:
+   *
+   *     const ctx = new MessageContext(lang);
+   *
+   *     const ctx = new MessageContext(lang, { useIsolating: false });
+   *
+   *     const ctx = new MessageContext(lang, {
+   *       useIsolating: true,
+   *       functions: {
+   *         NODE_ENV: () => process.env.NODE_ENV
+   *       }
+   *     });
+   *
    * Available options:
    *
-   *   - functions - an object of additional functions available to
-   *                 translations as builtins.
+   *   - `functions` - an object of additional functions available to
+   *                   translations as builtins.
+   *
+   *   - `useIsolating` - boolean specifying whether to use Unicode isolation
+   *                    marks (FSI, PDI) for bidi interpolations.
    *
    * @param   {string} lang      - Language of the context.
    * @param   {Object} [options]
    * @returns {MessageContext}
    */
-  constructor(lang, options = {}) {
+  constructor(lang, { functions = {}, useIsolating = true } = {}) {
     this.lang = lang;
-    this.functions = options.functions || {};
+    this.functions = functions;
+    this.useIsolating = useIsolating;
     this.messages = new Map();
     this.intls = new WeakMap();
   }
@@ -1967,12 +1992,27 @@ class Node {
   constructor() {}
 }
 
-class Resource extends Node {
+class NodeList extends Node {
   constructor(body = [], comment = null) {
     super();
-    this.type = 'Resource';
+    this.type = 'NodeList';
     this.body = body;
     this.comment = comment;
+  }
+}
+
+class Resource extends NodeList {
+  constructor(body = [], comment = null) {
+    super(body, comment);
+    this.type = 'Resource';
+  }
+}
+
+class Section extends NodeList {
+  constructor(key, body = [], comment = null) {
+    super(body, comment);
+    this.type = 'Section';
+    this.key = key;
   }
 }
 
@@ -1991,22 +2031,13 @@ class Identifier extends Node {
   }
 }
 
-class Section extends Node {
-  constructor(key, body = [], comment = null) {
-    super();
-    this.type = 'Section';
-    this.key = key;
-    this.body = body;
-    this.comment = comment;
-  }
-}
-
 class Pattern$1 extends Node {
-  constructor(source, elements) {
+  constructor(source, elements, quoted = false) {
     super();
     this.type = 'Pattern';
     this.source = source;
     this.elements = elements;
+    this.quoted = quoted;
   }
 }
 
@@ -2160,7 +2191,7 @@ var AST = {
   JunkEntry
 };
 
-/*eslint no-magic-numbers: [0]*/
+/*  eslint no-magic-numbers: [0]  */
 
 const MAX_PLACEABLES$1 = 100;
 
@@ -2184,6 +2215,10 @@ function isIdentifierStart(cc) {
  * for runtime performance and generates an optimized entries object.
  */
 class Parser {
+  constructor(withSource = true) {
+    this.withSource = withSource;
+  }
+
   /**
    * @param {string} string
    * @returns {[AST.Resource, []]}
@@ -2223,7 +2258,7 @@ class Parser {
         const entry = this.getEntry(comment);
 
         // If retrieved entry is a Section, switch the section pointer to it.
-        if (entry.type === 'Section') {
+        if (entry instanceof AST.Section) {
           resource.body.push(entry);
           section = entry.body;
         } else {
@@ -2548,9 +2583,9 @@ class Parser {
       }
     }
 
-    const pattern = new AST.Pattern(source, content);
-    pattern._quoteDelim = quoteDelimited !== null;
-    return pattern;
+    return new AST.Pattern(
+      this.withSource ? source : null, content, quoteDelimited !== null
+    );
   }
   /* eslint-enable complexity */
 
@@ -2957,8 +2992,8 @@ class Parser {
 }
 
 var FTLASTParser = {
-  parseResource: function(string) {
-    const parser = new Parser();
+  parseResource: function(string, { withSource = true } = {}) {
+    const parser = new Parser(withSource);
     return parser.getResource(string);
   },
 };
@@ -3100,200 +3135,6 @@ function createEntriesFromAST([resource, errors]) {
   return [entities, errors];
 }
 
-/**
- * @private
- *
- * This function is an inner function for `Localization.formatWithFallback`.
- *
- * It takes a `MessageContext`, list of l10n-ids and a method to be used for
- * key resolution (either `valueFromContext` or `entityFromContext`) and
- * optionally a value returned from `keysFromContext` executed against
- * another `MessageContext`.
- *
- * The idea here is that if the previous `MessageContext` did not resolve
- * all keys, we're calling this function with the next context to resolve
- * the remaining ones.
- *
- * In the function, we loop oer `keys` and check if we have the `prev`
- * passed and if it has an error entry for the position we're in.
- *
- * If it doesn't, it means that we have a good translation for this key and
- * we return it. If it does, we'll try to resolve the key using the passed
- * `MessageContext`.
- *
- * In the end, we return an Object with resolved translations, errors and
- * a boolean indicating if there were any errors found.
- *
- * The translations are either strings, if the method is `valueFromContext`
- * or objects with value and attributes if the method is `entityFromContext`.
- *
- * See `Localization.formatWithFallback` for more info on how this is used.
- *
- * @param {MessageContext} ctx
- * @param {Array<string>}  keys
- * @param {Function}       method
- * @param {{
- *   errors: Array<Error>,
- *   hasErrors: boolean,
- *   translations: Array<string>|Array<{value: string, attrs: Object}>}} prev
- *
- * @returns {{
- *   errors: Array<Error>,
- *   hasErrors: boolean,
- *   translations: Array<string>|Array<{value: string, attrs: Object}>}}
- */
-function keysFromContext(method, sanitizeArgs, ctx, keys, prev) {
-  const entityErrors = [];
-  const result = {
-    errors: new Array(keys.length),
-    withoutFatal: new Array(keys.length),
-    hasFatalErrors: false,
-  };
-
-  result.translations = keys.map((key, i) => {
-    // Use a previously formatted good value if it had no errors.
-    if (prev && !prev.errors[i] ) {
-      return prev.translations[i];
-    }
-
-    // Clear last entity's errors.
-    entityErrors.length = 0;
-    const args = sanitizeArgs(key[1]);
-    const translation = method(ctx, entityErrors, key[0], args);
-
-    // No errors still? Use this translation as fallback to the previous one
-    // which had errors.
-    if (entityErrors.length === 0) {
-      return translation;
-    }
-
-    // The rest of this function handles the scenario in which the translation
-    // was formatted with errors.  Copy the errors to the result object so that
-    // the Localization can handle them (e.g. console.warn about them).
-    result.errors[i] = entityErrors.slice();
-
-    // Formatting errors are not fatal and the translations are usually still
-    // usable and can be good fallback values.  Fatal errors should signal to
-    // the Localization that another fallback should be loaded.
-    if (!entityErrors.some(isL10nError)) {
-      result.withoutFatal[i] = true;
-    } else if (!result.hasFatalErrors) {
-      result.hasFatalErrors = true;
-    }
-
-    // Use the previous translation for this `key` even if it had formatting
-    // errors.  This is usually closer the user's preferred language anyways.
-    if (prev && prev.withoutFatal[i]) {
-      // Mark this previous translation as a good potential fallback value in
-      // case of further fallbacks.
-      result.withoutFatal[i] = true;
-      return prev.translations[i];
-    }
-
-    // If no good or almost good previous translation is available, return the
-    // current translation.  In case of minor errors it's a partially
-    // formatted translation.  In the worst-case scenario it an identifier of
-    // the requested entity.
-    return translation;
-  });
-
-  return result;
-}
-
-/**
- * @private
- *
- * This function is passed as a method to `keysFromContext` and resolve
- * a value of a single L10n Entity using provided `MessageContext`.
- *
- * If the function fails to retrieve the entity, it will return an ID of it.
- * If formatting fails, it will return a partially resolved entity.
- *
- * In both cases, an error is being added to the errors array.
- *
- * @param   {MessageContext} ctx
- * @param   {Array<Error>}   errors
- * @param   {string}         id
- * @param   {Object}         args
- * @returns {string}
- */
-function valueFromContext(ctx, errors, id, args) {
-  const entity = ctx.messages.get(id);
-
-  if (entity === undefined) {
-    errors.push(new L10nError(`Unknown entity: ${id}`));
-    return id;
-  }
-
-  return ctx.format(entity, args, errors);
-}
-
-/**
- * @private
- *
- * This function is passed as a method to `keysFromContext` and resolve
- * a single L10n Entity using provided `MessageContext`.
- *
- * The function will return an object with a value and attributes of the
- * entity.
- *
- * If the function fails to retrieve the entity, the value is set to the ID of
- * an entity, and attrs to `null`. If formatting fails, it will return
- * a partially resolved value and attributes.
- *
- * In both cases, an error is being added to the errors array.
- *
- * @param   {MessageContext} ctx
- * @param   {Array<Error>}   errors
- * @param   {String}         id
- * @param   {Object}         args
- * @returns {Object}
- */
-function entityFromContext(ctx, errors, id, args) {
-  const entity = ctx.messages.get(id);
-
-  if (entity === undefined) {
-    errors.push(new L10nError(`Unknown entity: ${id}`));
-    return { value: id, attrs: null };
-  }
-
-  const formatted = {
-    value: ctx.format(entity, args, errors),
-    attrs: null,
-  };
-
-  if (entity.traits) {
-    formatted.attrs = [];
-    for (let i = 0, trait; (trait = entity.traits[i]); i++) {
-      if (!trait.key.hasOwnProperty('ns')) {
-        continue;
-      }
-      const attr = ctx.format(trait, args, errors);
-      if (attr !== null) {
-        formatted.attrs.push([
-          trait.key.ns,
-          trait.key.name,
-          attr
-        ]);
-      }
-    }
-  }
-
-  return formatted;
-}
-
-/**
- * @private
- *
- * Test if an error is an instance of L10nError.
- *
- * @param   {Error}   error
- * @returns {boolean}
- */
-function isL10nError(error) {
-  return error instanceof L10nError;
-}
-
 const HTTP_STATUS_CODE_OK = 200;
 
 function load(url) {
@@ -3333,7 +3174,7 @@ function fetchResource(res, lang) {
 
 var index = {
   FTLASTParser, FTLEntriesParser: FTLRuntimeParser, createEntriesFromAST, L10nError,
-  keysFromContext, valueFromContext, entityFromContext, fetchResource
+  fetchResource
 };
 
 return index;

@@ -14,7 +14,7 @@ describe('Traits', function() {
 
   describe('missing', function(){
     before(function() {
-      ctx = new MessageContext('en-US');
+      ctx = new MessageContext('en-US', { useIsolating: false });
       ctx.addMessages(ftl`
         foo = Foo
         bar = Bar
@@ -22,6 +22,7 @@ describe('Traits', function() {
         baz = { foo } Baz
         qux = { foo } Qux
             [trait] Qux Trait
+
         ref-foo = { foo[missing] }
         ref-bar = { bar[missing] }
         ref-baz = { baz[missing] }
@@ -64,12 +65,13 @@ describe('Traits', function() {
 
   describe('with string values', function(){
     before(function() {
-      ctx = new MessageContext('en-US');
+      ctx = new MessageContext('en-US', { useIsolating: false });
       ctx.addMessages(ftl`
         foo = Foo
             [trait] Foo Trait
         bar = { foo } Bar
             [trait] Bar Trait
+
         ref-foo = { foo[trait] }
         ref-bar = { bar[trait] }
       `);
@@ -106,7 +108,7 @@ describe('Traits', function() {
 
   describe('with simple pattern values', function(){
     before(function() {
-      ctx = new MessageContext('en-US');
+      ctx = new MessageContext('en-US', { useIsolating: false });
       ctx.addMessages(ftl`
         foo = Foo
         bar = Bar
@@ -115,6 +117,7 @@ describe('Traits', function() {
             [trait] { foo } Trait
         qux = Qux
             [trait] { qux } Trait
+
         ref-bar = { bar[trait] }
         ref-baz = { baz[trait] }
         ref-qux = { qux[trait] }
@@ -166,13 +169,14 @@ describe('Traits', function() {
 
   describe('with values with select expressions', function(){
     before(function() {
-      ctx = new MessageContext('en-US');
+      ctx = new MessageContext('en-US', { useIsolating: false });
       ctx.addMessages(ftl`
         foo = Foo
             [trait] { "a" ->
                         [a] A
                         [b] B
                     }
+
         ref-foo = { foo[trait] }
       `);
     });

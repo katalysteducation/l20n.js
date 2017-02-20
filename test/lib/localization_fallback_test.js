@@ -20,7 +20,7 @@ function createLocalization(data) {
   }
 
   function createContext(lang) {
-    return new Intl.MessageContext(lang);
+    return new Intl.MessageContext(lang, { useIsolating: false });
   }
 
   return new Localization(requestBundles, createContext);
@@ -47,7 +47,7 @@ describe('No fallback - best case scenario', function() {
         `
       ],
     ]);
-  });
+  }); 
 
   after(function() {
     console.warn = _consolewarn;
@@ -86,7 +86,7 @@ describe('Fallback in case of missing translations', function() {
         `
       ]
     ]);
-  });
+  }); 
 
   after(function() {
     console.warn = _consolewarn;
@@ -125,7 +125,7 @@ describe('Fallback in case of broken translations', function() {
         `
       ]
     ]);
-  });
+  }); 
 
   after(function() {
     console.warn = _consolewarn;
@@ -175,7 +175,7 @@ describe('Fallback translation is missing', function() {
         `
       ]
     ]);
-  });
+  }); 
 
   after(function() {
     console.warn = _consolewarn;
@@ -211,7 +211,7 @@ describe('Fallback translation is broken', function() {
         `
       ]
     ]);
-  });
+  }); 
 
   after(function() {
     console.warn = _consolewarn;

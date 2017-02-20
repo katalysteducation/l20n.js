@@ -14,7 +14,7 @@ describe('Primitives', function() {
 
   describe('Numbers', function(){
     before(function() {
-      ctx = new MessageContext('en-US');
+      ctx = new MessageContext('en-US', { useIsolating: false });
       ctx.addMessages(ftl`
         one     = { 1 }
         select  = { 1 ->
@@ -40,20 +40,25 @@ describe('Primitives', function() {
 
   describe('Simple string value', function(){
     before(function() {
-      ctx = new MessageContext('en-US');
+      ctx = new MessageContext('en-US', { useIsolating: false });
       ctx.addMessages(ftl`
         foo               = Foo
+
         placeable-literal = { "Foo" } Bar
         placeable-entity  = { foo } Bar
+
         selector-literal  = { "Foo" ->
             [Foo] Member 1
         }
         selector-entity   = { foo ->
             [Foo] Member 2
         }
+
         bar               =
             [trait] Bar Trait
+
         placeable-trait   = { bar[trait] }
+
         selector-trait    = { bar[trait] ->
             [Bar Trait] Member 3
         }
@@ -124,21 +129,26 @@ describe('Primitives', function() {
 
   describe('Complex string value', function(){
     before(function() {
-      ctx = new MessageContext('en-US');
+      ctx = new MessageContext('en-US', { useIsolating: false });
       ctx.addMessages(ftl`
         foo               = Foo
         bar               = { foo } Bar
+
         placeable-literal = { "{ foo } Bar" } Baz
         placeable-entity  = { bar } Baz
+
         selector-literal  = { "{ foo } Bar" ->
             [Foo Bar] Member 1
         }
         selector-entity   = { bar ->
             [Foo Bar] Member 2
         }
+
         baz               =
             [trait] { bar } Baz Trait
+
         placeable-trait   = { baz[trait] }
+
         selector-trait    = { baz[trait] ->
             [Foo Bar Baz Trait] Member 3
         }

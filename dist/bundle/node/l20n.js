@@ -4,7 +4,7 @@ Object.defineProperty(exports, '__esModule', { value: true });
 
 var fs = require('fs');
 
-/*eslint no-magic-numbers: [0]*/
+/*  eslint no-magic-numbers: [0]  */
 
 const locales2rules = {
   'af': 3,
@@ -475,7 +475,7 @@ class L10nError extends Error {
   }
 }
 
-/*eslint no-magic-numbers: [0]*/
+/*  eslint no-magic-numbers: [0]  */
 
 const MAX_PLACEABLES = 100;
 
@@ -1418,8 +1418,6 @@ class FTLList extends Array {
 var builtins = {
   'NUMBER': ([arg], opts) =>
     new FTLNumber(arg.valueOf(), merge(arg.opts, opts)),
-  'PLURAL': ([arg], opts) =>
-    new FTLNumber(arg.valueOf(), merge(arg.opts, opts)),
   'DATETIME': ([arg], opts) =>
     new FTLDateTime(arg.valueOf(), merge(arg.opts, opts)),
   'LIST': args => FTLList.from(args),
@@ -1474,6 +1472,11 @@ function valuesOf(opts) {
 
 // Prevent expansion of too long placeables.
 const MAX_PLACEABLE_LENGTH = 2500;
+
+// Unicode bidi isolation characters.
+const FSI = '\u2068';
+const PDI = '\u2069';
+
 
 /**
  * Map an array of JavaScript values into FTL Values.
@@ -1766,7 +1769,8 @@ function Pattern(env, ptn) {
       const value = part.length === 1 ?
         Value(env, part[0]) : mapValues(env, part);
 
-      const str = value.toString(ctx);
+      let str = value.toString(ctx);
+
       if (str.length > MAX_PLACEABLE_LENGTH) {
         errors.push(
           new RangeError(
@@ -1774,7 +1778,11 @@ function Pattern(env, ptn) {
             `(${str.length}, max allowed is ${MAX_PLACEABLE_LENGTH})`
           )
         );
-        result += str.substr(0, MAX_PLACEABLE_LENGTH);
+        str = str.substr(0, MAX_PLACEABLE_LENGTH);
+      }
+
+      if (ctx.useIsolating) {
+        result += `${FSI}${str}${PDI}`;
       } else {
         result += str;
       }
@@ -1825,18 +1833,35 @@ class MessageContext {
    * The `lang` argument is used to instantiate `Intl` formatters used by
    * translations.  The `options` object can be used to configure the context.
    *
+   * Examples:
+   *
+   *     const ctx = new MessageContext(lang);
+   *
+   *     const ctx = new MessageContext(lang, { useIsolating: false });
+   *
+   *     const ctx = new MessageContext(lang, {
+   *       useIsolating: true,
+   *       functions: {
+   *         NODE_ENV: () => process.env.NODE_ENV
+   *       }
+   *     });
+   *
    * Available options:
    *
-   *   - functions - an object of additional functions available to
-   *                 translations as builtins.
+   *   - `functions` - an object of additional functions available to
+   *                   translations as builtins.
+   *
+   *   - `useIsolating` - boolean specifying whether to use Unicode isolation
+   *                    marks (FSI, PDI) for bidi interpolations.
    *
    * @param   {string} lang      - Language of the context.
    * @param   {Object} [options]
    * @returns {MessageContext}
    */
-  constructor(lang, options = {}) {
+  constructor(lang, { functions = {}, useIsolating = true } = {}) {
     this.lang = lang;
-    this.functions = options.functions || {};
+    this.functions = functions;
+    this.useIsolating = useIsolating;
     this.messages = new Map();
     this.intls = new WeakMap();
   }
@@ -1999,15 +2024,20 @@ var serializer = {
     if (entity.comment) {
       str += `\n${this.dumpComment(entity.comment)}\n`;
     }
+
     const id = this.dumpIdentifier(entity.id);
-    const value = this.dumpPattern(entity.value);
+    str += `${id} =`;
+
+    if (entity.value) {
+      const value = this.dumpPattern(entity.value);
+      str += ` ${value}`;
+    }
 
     if (entity.traits.length) {
       const traits = this.dumpMembers(entity.traits, 2);
-      str += `${id} = ${value}\n${traits}`;
-    } else {
-      str += `${id} = ${value}`;
+      str += `\n${traits}`;
     }
+
     return str;
   },
 
@@ -2043,9 +2073,7 @@ var serializer = {
     if (pattern === null) {
       return '';
     }
-    if (pattern._quoteDelim) {
-      return `"${pattern.source}"`;
-    }
+
     let str = '';
 
     pattern.elements.forEach(elem => {
@@ -2059,6 +2087,11 @@ var serializer = {
         str += this.dumpPlaceable(elem);
       }
     });
+
+    if (pattern.quoted) {
+      return `"${str.replace('"', '\\"')}"`;
+    }
+
     return str;
   },
 
@@ -2129,12 +2162,27 @@ class Node {
   constructor() {}
 }
 
-class Resource extends Node {
+class NodeList extends Node {
   constructor(body = [], comment = null) {
     super();
-    this.type = 'Resource';
+    this.type = 'NodeList';
     this.body = body;
     this.comment = comment;
+  }
+}
+
+class Resource extends NodeList {
+  constructor(body = [], comment = null) {
+    super(body, comment);
+    this.type = 'Resource';
+  }
+}
+
+class Section extends NodeList {
+  constructor(key, body = [], comment = null) {
+    super(body, comment);
+    this.type = 'Section';
+    this.key = key;
   }
 }
 
@@ -2153,22 +2201,13 @@ class Identifier extends Node {
   }
 }
 
-class Section extends Node {
-  constructor(key, body = [], comment = null) {
-    super();
-    this.type = 'Section';
-    this.key = key;
-    this.body = body;
-    this.comment = comment;
-  }
-}
-
 class Pattern$1 extends Node {
-  constructor(source, elements) {
+  constructor(source, elements, quoted = false) {
     super();
     this.type = 'Pattern';
     this.source = source;
     this.elements = elements;
+    this.quoted = quoted;
   }
 }
 
@@ -2322,7 +2361,7 @@ var AST = {
   JunkEntry
 };
 
-/*eslint no-magic-numbers: [0]*/
+/*  eslint no-magic-numbers: [0]  */
 
 const MAX_PLACEABLES$1 = 100;
 
@@ -2346,6 +2385,10 @@ function isIdentifierStart(cc) {
  * for runtime performance and generates an optimized entries object.
  */
 class Parser {
+  constructor(withSource = true) {
+    this.withSource = withSource;
+  }
+
   /**
    * @param {string} string
    * @returns {[AST.Resource, []]}
@@ -2385,7 +2428,7 @@ class Parser {
         const entry = this.getEntry(comment);
 
         // If retrieved entry is a Section, switch the section pointer to it.
-        if (entry.type === 'Section') {
+        if (entry instanceof AST.Section) {
           resource.body.push(entry);
           section = entry.body;
         } else {
@@ -2710,9 +2753,9 @@ class Parser {
       }
     }
 
-    const pattern = new AST.Pattern(source, content);
-    pattern._quoteDelim = quoteDelimited !== null;
-    return pattern;
+    return new AST.Pattern(
+      this.withSource ? source : null, content, quoteDelimited !== null
+    );
   }
   /* eslint-enable complexity */
 
@@ -3119,8 +3162,8 @@ class Parser {
 }
 
 var parser = {
-  parseResource: function(string) {
-    const parser = new Parser();
+  parseResource: function(string, { withSource = true } = {}) {
+    const parser = new Parser(withSource);
     return parser.getResource(string);
   },
 };

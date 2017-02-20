@@ -40,10 +40,6 @@ const ALLOWED_ATTRIBUTES = {
 const DOM_NAMESPACES = {
   'html': 'http://www.w3.org/1999/xhtml',
   'xul': 'http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul',
-
-  // Reverse map for overlays.
-  'http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul': 'xul',
-  'http://www.w3.org/1999/xhtml': 'html',
 };
 
 
@@ -72,11 +68,14 @@ export default function overlayElement(element, translation) {
     }
   }
 
-  for (const key in translation.attrs) {
-    const [ns, name] =
-      key.includes('/') ? key.split('/', 2) : [null, key];
-    if (isAttrAllowed({ ns, name }, element)) {
-      element.setAttribute(name, translation.attrs[key]);
+  if (translation.attrs === null) {
+    return;
+  }
+
+  for (const [ns, name, val] of translation.attrs) {
+    if (DOM_NAMESPACES[ns] === element.namespaceURI &&
+        isAttrAllowed({ name }, element)) {
+      element.setAttribute(name, val);
     }
   }
 }
@@ -141,10 +140,7 @@ function overlay(sourceElement, translationElement) {
   // cleared if a new language doesn't use them; https://bugzil.la/922577
   if (translationElement.attributes) {
     for (k = 0, attr; (attr = translationElement.attributes[k]); k++) {
-      if (isAttrAllowed({
-        ns: DOM_NAMESPACES[translationElement.namespaceURI],
-        name: attr.name
-      }, sourceElement)) {
+      if (isAttrAllowed(attr, sourceElement)) {
         sourceElement.setAttribute(attr.name, attr.value);
       }
     }
@@ -183,10 +179,6 @@ function isElementAllowed(element) {
  * @private
  */
 function isAttrAllowed(attr, element) {
-  // Does it have a namespace that matches the element's?
-  if (attr.ns === null || DOM_NAMESPACES[attr.ns] !== element.namespaceURI) {
-    return false;
-  }
   const allowed = ALLOWED_ATTRIBUTES[element.namespaceURI];
   if (!allowed) {
     return false;

@@ -2,9 +2,7 @@
 // https://github.com/whatwg/html/issues/127
 export function documentReady() {
   const rs = document.readyState;
-  // !important
-  // if (rs === 'interactive' || rs === 'completed') {
-  if (rs !== 'loading') {
+  if (rs === 'interactive' || rs === 'completed') {
     return Promise.resolve();
   }
 
@@ -26,7 +24,7 @@ export function getResourceLinks(elem) {
 }
 
 export function getMeta(head) {
-  let availableLangs = new Set();
+  let availableLangs = [];
   let defaultLang = null;
   let appVersion = null;
 
@@ -41,9 +39,7 @@ export function getMeta(head) {
     const content = meta.getAttribute('content').trim();
     switch (name) {
       case 'availableLanguages':
-        availableLangs = new Set(content.split(',').map(lang => {
-          return lang.trim();
-        }));
+        availableLangs = content.split(',').map(lang => lang.trim());
         break;
       case 'defaultLanguage':
         defaultLang = content;

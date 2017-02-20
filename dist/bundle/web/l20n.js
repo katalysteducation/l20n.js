@@ -16,7 +16,7 @@ if (typeof Intl === 'undefined') {
   window.Intl = {};
 }
 
-/*eslint no-magic-numbers: [0]*/
+/*  eslint no-magic-numbers: [0]  */
 
 const locales2rules = {
   'af': 3,
@@ -487,7 +487,7 @@ class L10nError extends Error {
   }
 }
 
-/*eslint no-magic-numbers: [0]*/
+/*  eslint no-magic-numbers: [0]  */
 
 const MAX_PLACEABLES = 100;
 
@@ -1430,8 +1430,6 @@ class FTLList extends Array {
 const builtins = {
   'NUMBER': ([arg], opts) =>
     new FTLNumber(arg.valueOf(), merge(arg.opts, opts)),
-  'PLURAL': ([arg], opts) =>
-    new FTLNumber(arg.valueOf(), merge(arg.opts, opts)),
   'DATETIME': ([arg], opts) =>
     new FTLDateTime(arg.valueOf(), merge(arg.opts, opts)),
   'LIST': args => FTLList.from(args),
@@ -1486,6 +1484,11 @@ function valuesOf(opts) {
 
 // Prevent expansion of too long placeables.
 const MAX_PLACEABLE_LENGTH = 2500;
+
+// Unicode bidi isolation characters.
+const FSI = '\u2068';
+const PDI = '\u2069';
+
 
 /**
  * Map an array of JavaScript values into FTL Values.
@@ -1778,7 +1781,8 @@ function Pattern(env, ptn) {
       const value = part.length === 1 ?
         Value(env, part[0]) : mapValues(env, part);
 
-      const str = value.toString(ctx);
+      let str = value.toString(ctx);
+
       if (str.length > MAX_PLACEABLE_LENGTH) {
         errors.push(
           new RangeError(
@@ -1786,7 +1790,11 @@ function Pattern(env, ptn) {
             `(${str.length}, max allowed is ${MAX_PLACEABLE_LENGTH})`
           )
         );
-        result += str.substr(0, MAX_PLACEABLE_LENGTH);
+        str = str.substr(0, MAX_PLACEABLE_LENGTH);
+      }
+
+      if (ctx.useIsolating) {
+        result += `${FSI}${str}${PDI}`;
       } else {
         result += str;
       }
@@ -1837,18 +1845,35 @@ class MessageContext {
    * The `lang` argument is used to instantiate `Intl` formatters used by
    * translations.  The `options` object can be used to configure the context.
    *
+   * Examples:
+   *
+   *     const ctx = new MessageContext(lang);
+   *
+   *     const ctx = new MessageContext(lang, { useIsolating: false });
+   *
+   *     const ctx = new MessageContext(lang, {
+   *       useIsolating: true,
+   *       functions: {
+   *         NODE_ENV: () => process.env.NODE_ENV
+   *       }
+   *     });
+   *
    * Available options:
    *
-   *   - functions - an object of additional functions available to
-   *                 translations as builtins.
+   *   - `functions` - an object of additional functions available to
+   *                   translations as builtins.
+   *
+   *   - `useIsolating` - boolean specifying whether to use Unicode isolation
+   *                    marks (FSI, PDI) for bidi interpolations.
    *
    * @param   {string} lang      - Language of the context.
    * @param   {Object} [options]
    * @returns {MessageContext}
    */
-  constructor(lang, options = {}) {
+  constructor(lang, { functions = {}, useIsolating = true } = {}) {
     this.lang = lang;
-    this.functions = options.functions || {};
+    this.functions = functions;
+    this.useIsolating = useIsolating;
     this.messages = new Map();
     this.intls = new WeakMap();
   }
@@ -1978,100 +2003,415 @@ if (!Intl.ListFormat) {
   };
 }
 
-function prioritizeLocales(def, availableLangs, requested) {
-  const supportedLocales = new Set();
-  for (const lang of requested) {
-    if (availableLangs.has(lang)) {
-      supportedLocales.add(lang);
+/* eslint-disable */
+
+var unicodeLocaleExtensionSequence = "-u(-[a-z0-9]{2,8})+";
+var unicodeLocaleExtensionSequenceRE = new RegExp(unicodeLocaleExtensionSequence);
+var unicodeLocaleExtensionSequenceGlobalRE = new RegExp(unicodeLocaleExtensionSequence, "g");
+var langTagMappings = {};
+var langSubtagMappings = {};
+var extlangMappings = {};
+
+/**
+ * Regular expression defining BCP 47 language tags.
+ *
+ * Spec: RFC 5646 section 2.1.
+ */
+var languageTagRE = (function () {
+  // RFC 5234 section B.1
+  // ALPHA          =  %x41-5A / %x61-7A   ; A-Z / a-z
+  var ALPHA = "[a-zA-Z]";
+  // DIGIT          =  %x30-39
+  //                        ; 0-9
+  var DIGIT = "[0-9]";
+
+  // RFC 5646 section 2.1
+  // alphanum      = (ALPHA / DIGIT)     ; letters and numbers
+  var alphanum = "(?:" + ALPHA + "|" + DIGIT + ")";
+  // regular       = "art-lojban"        ; these tags match the 'langtag'
+  //               / "cel-gaulish"       ; production, but their subtags
+  //               / "no-bok"            ; are not extended language
+  //               / "no-nyn"            ; or variant subtags: their meaning
+  //               / "zh-guoyu"          ; is defined by their registration
+  //               / "zh-hakka"          ; and all of these are deprecated
+  //               / "zh-min"            ; in favor of a more modern
+  //               / "zh-min-nan"        ; subtag or sequence of subtags
+  //               / "zh-xiang"
+  var regular = "(?:art-lojban|cel-gaulish|no-bok|no-nyn|zh-guoyu|zh-hakka|zh-min|zh-min-nan|zh-xiang)";
+  // irregular     = "en-GB-oed"         ; irregular tags do not match
+  //                / "i-ami"             ; the 'langtag' production and
+  //                / "i-bnn"             ; would not otherwise be
+  //                / "i-default"         ; considered 'well-formed'
+  //                / "i-enochian"        ; These tags are all valid,
+  //                / "i-hak"             ; but most are deprecated
+  //                / "i-klingon"         ; in favor of more modern
+  //                / "i-lux"             ; subtags or subtag
+  //                / "i-mingo"           ; combination
+  //                / "i-navajo"
+  //                / "i-pwn"
+  //                / "i-tao"
+  //                / "i-tay"
+  //                / "i-tsu"
+  //                / "sgn-BE-FR"
+  //                / "sgn-BE-NL"
+  //                / "sgn-CH-DE"
+  var irregular = "(?:en-GB-oed|i-ami|i-bnn|i-default|i-enochian|i-hak|i-klingon|i-lux|i-mingo|i-navajo|i-pwn|i-tao|i-tay|i-tsu|sgn-BE-FR|sgn-BE-NL|sgn-CH-DE)";
+  // grandfathered = irregular           ; non-redundant tags registered
+  //               / regular             ; during the RFC 3066 era
+  var grandfathered = "(?:" + irregular + "|" + regular + ")";
+  // privateuse    = "x" 1*("-" (1*8alphanum))
+  var privateuse = "(?:x(?:-[a-z0-9]{1,8})+)";
+  // singleton     = DIGIT               ; 0 - 9
+  //               / %x41-57             ; A - W
+  //               / %x59-5A             ; Y - Z
+  //               / %x61-77             ; a - w
+  //               / %x79-7A             ; y - z
+  var singleton = "(?:" + DIGIT + "|[A-WY-Za-wy-z])";
+  // extension     = singleton 1*("-" (2*8alphanum))
+  var extension = "(?:" + singleton + "(?:-" + alphanum + "{2,8})+)";
+  // variant       = 5*8alphanum         ; registered variants
+  //               / (DIGIT 3alphanum)
+  var variant = "(?:" + alphanum + "{5,8}|(?:" + DIGIT + alphanum + "{3}))";
+  // region        = 2ALPHA              ; ISO 3166-1 code
+  //               / 3DIGIT              ; UN M.49 code
+  var region = "(?:" + ALPHA + "{2}|" + DIGIT + "{3})";
+  // script        = 4ALPHA              ; ISO 15924 code
+  var script = "(?:" + ALPHA + "{4})";
+  // extlang       = 3ALPHA              ; selected ISO 639 codes
+  //                 *2("-" 3ALPHA)      ; permanently reserved
+  var extlang = "(?:" + ALPHA + "{3}(?:-" + ALPHA + "{3}){0,2})";
+  // language      = 2*3ALPHA            ; shortest ISO 639 code
+  //                 ["-" extlang]       ; sometimes followed by
+  //                                     ; extended language subtags
+  //               / 4ALPHA              ; or reserved for future use
+  //               / 5*8ALPHA            ; or registered language subtag
+  var language = "(?:" + ALPHA + "{2,3}(?:-" + extlang + ")?|" + ALPHA + "{4}|" + ALPHA + "{5,8})";
+  // langtag       = language
+  //                 ["-" script]
+  //                 ["-" region]
+  //                 *("-" variant)
+  //                 *("-" extension)
+  //                 ["-" privateuse]
+  var langtag = language + "(?:-" + script + ")?(?:-" + region + ")?(?:-" +
+    variant + ")*(?:-" + extension + ")*(?:-" + privateuse + ")?";
+  // Language-Tag  = langtag             ; normal language tags
+  //               / privateuse          ; private use tag
+  //               / grandfathered       ; grandfathered tags
+  var languageTag = "^(?:" + langtag + "|" + privateuse + "|" + grandfathered + ")$";
+
+  // Language tags are case insensitive (RFC 5646 section 2.1.1).
+  return new RegExp(languageTag, "i");
+}());
+
+var duplicateVariantRE = (function () {
+  // RFC 5234 section B.1
+  // ALPHA          =  %x41-5A / %x61-7A   ; A-Z / a-z
+  var ALPHA = "[a-zA-Z]";
+  // DIGIT          =  %x30-39
+  //                        ; 0-9
+  var DIGIT = "[0-9]";
+
+  // RFC 5646 section 2.1
+  // alphanum      = (ALPHA / DIGIT)     ; letters and numbers
+  var alphanum = "(?:" + ALPHA + "|" + DIGIT + ")";
+  // variant       = 5*8alphanum         ; registered variants
+  //               / (DIGIT 3alphanum)
+  var variant = "(?:" + alphanum + "{5,8}|(?:" + DIGIT + alphanum + "{3}))";
+
+  // Match a langtag that contains a duplicate variant.
+  var duplicateVariant =
+    // Match everything in a langtag prior to any variants, and maybe some
+    // of the variants as well (which makes this pattern inefficient but
+    // not wrong, for our purposes);
+    "(?:" + alphanum + "{2,8}-)+" +
+    // a variant, parenthesised so that we can refer back to it later;
+    "(" + variant + ")-" +
+    // zero or more subtags at least two characters long (thus stopping
+    // before extension and privateuse components);
+    "(?:" + alphanum + "{2,8}-)*" +
+    // and the same variant again
+    "\\1" +
+    // ...but not followed by any characters that would turn it into a
+    // different subtag.
+    "(?!" + alphanum + ")";
+
+  // Language tags are case insensitive (RFC 5646 section 2.1.1), but for
+  // this regular expression that's covered by having its character classes
+  // list both upper- and lower-case characters.
+  return new RegExp(duplicateVariant);
+}());
+
+
+var duplicateSingletonRE = (function () {
+  // RFC 5234 section B.1
+  // ALPHA          =  %x41-5A / %x61-7A   ; A-Z / a-z
+  var ALPHA = "[a-zA-Z]";
+  // DIGIT          =  %x30-39
+  //                        ; 0-9
+  var DIGIT = "[0-9]";
+
+  // RFC 5646 section 2.1
+  // alphanum      = (ALPHA / DIGIT)     ; letters and numbers
+  var alphanum = "(?:" + ALPHA + "|" + DIGIT + ")";
+  // singleton     = DIGIT               ; 0 - 9
+  //               / %x41-57             ; A - W
+  //               / %x59-5A             ; Y - Z
+  //               / %x61-77             ; a - w
+  //               / %x79-7A             ; y - z
+  var singleton = "(?:" + DIGIT + "|[A-WY-Za-wy-z])";
+
+  // Match a langtag that contains a duplicate singleton.
+  var duplicateSingleton =
+    // Match a singleton subtag, parenthesised so that we can refer back to
+    // it later;
+    "-(" + singleton + ")-" +
+    // then zero or more subtags;
+    "(?:" + alphanum + "+-)*" +
+    // and the same singleton again
+    "\\1" +
+    // ...but not followed by any characters that would turn it into a
+    // different subtag.
+    "(?!" + alphanum + ")";
+
+  // Language tags are case insensitive (RFC 5646 section 2.1.1), but for
+  // this regular expression that's covered by having its character classes
+  // list both upper- and lower-case characters.
+  return new RegExp(duplicateSingleton);
+}());
+
+/**
+ * Verifies that the given string is a well-formed BCP 47 language tag
+ * with no duplicate variant or singleton subtags.
+ *
+ * Spec: ECMAScript Internationalization API Specification, 6.2.2.
+ */
+function IsStructurallyValidLanguageTag(locale) {
+  if (!languageTagRE.test(locale))
+    return false;
+
+  // Before checking for duplicate variant or singleton subtags with
+  // regular expressions, we have to get private use subtag sequences
+  // out of the picture.
+  if (locale.startsWith("x-"))
+    return true;
+  var pos = locale.indexOf("-x-");
+  if (pos !== -1)
+    locale = locale.substring(0, pos);
+
+  // Check for duplicate variant or singleton subtags.
+  return !duplicateVariantRE.test(locale) &&
+    !duplicateSingletonRE.test(locale);
+}
+
+/**
+ * Canonicalizes the given structurally valid BCP 47 language tag, including
+ * regularized case of subtags. For example, the language tag
+ * Zh-NAN-haNS-bu-variant2-Variant1-u-ca-chinese-t-Zh-laTN-x-PRIVATE, where
+ *
+ *     Zh             ; 2*3ALPHA
+ *     -NAN           ; ["-" extlang]
+ *     -haNS          ; ["-" script]
+ *     -bu            ; ["-" region]
+ *     -variant2      ; *("-" variant)
+ *     -Variant1
+ *     -u-ca-chinese  ; *("-" extension)
+ *     -t-Zh-laTN
+ *     -x-PRIVATE     ; ["-" privateuse]
+ *
+ * becomes nan-Hans-mm-variant2-variant1-t-zh-latn-u-ca-chinese-x-private
+ *
+ * Spec: ECMAScript Internationalization API Specification, 6.2.3.
+ * Spec: RFC 5646, section 4.5.
+ */
+function CanonicalizeLanguageTag(locale) {
+  // The input
+  // "Zh-NAN-haNS-bu-variant2-Variant1-u-ca-chinese-t-Zh-laTN-x-PRIVATE"
+  // will be used throughout this method to illustrate how it works.
+
+  // Language tags are compared and processed case-insensitively, so
+  // technically it's not necessary to adjust case. But for easier processing,
+  // and because the canonical form for most subtags is lower case, we start
+  // with lower case for all.
+  // "Zh-NAN-haNS-bu-variant2-Variant1-u-ca-chinese-t-Zh-laTN-x-PRIVATE" ->
+  // "zh-nan-hans-bu-variant2-variant1-u-ca-chinese-t-zh-latn-x-private"
+  locale = locale.toLowerCase();
+
+  // Handle mappings for complete tags.
+  if (langTagMappings && langTagMappings.hasOwnProperty(locale))
+    return langTagMappings[locale];
+
+  var subtags = locale.split("-");
+  var i = 0;
+
+  // Handle the standard part: All subtags before the first singleton or "x".
+  // "zh-nan-hans-bu-variant2-variant1"
+  while (i < subtags.length) {
+    var subtag = subtags[i];
+
+    // If we reach the start of an extension sequence or private use part,
+    // we're done with this loop. We have to check for i > 0 because for
+    // irregular language tags, such as i-klingon, the single-character
+    // subtag "i" is not the start of an extension sequence.
+    // In the example, we break at "u".
+    if (subtag.length === 1 && (i > 0 || subtag === "x"))
+      break;
+
+    if (subtag.length === 4) {
+      // 4-character subtags are script codes; their first character
+      // needs to be capitalized. "hans" -> "Hans"
+      subtag = subtag[0].toUpperCase() +
+        subtag.substring(1);
+    } else if (i !== 0 && subtag.length === 2) {
+      // 2-character subtags that are not in initial position are region
+      // codes; they need to be upper case. "bu" -> "BU"
+      subtag = subtag.toUpperCase();
     }
+    if (langSubtagMappings.hasOwnProperty(subtag)) {
+      // Replace deprecated subtags with their preferred values.
+      // "BU" -> "MM"
+      // This has to come after we capitalize region codes because
+      // otherwise some language and region codes could be confused.
+      // For example, "in" is an obsolete language code for Indonesian,
+      // but "IN" is the country code for India.
+      // Note that the script generating langSubtagMappings makes sure
+      // that no regular subtag mapping will replace an extlang code.
+      subtag = langSubtagMappings[subtag];
+    } else if (extlangMappings.hasOwnProperty(subtag)) {
+      // Replace deprecated extlang subtags with their preferred values,
+      // and remove the preceding subtag if it's a redundant prefix.
+      // "zh-nan" -> "nan"
+      // Note that the script generating extlangMappings makes sure that
+      // no extlang mapping will replace a normal language code.
+      subtag = extlangMappings[subtag].preferred;
+      if (i === 1 && extlangMappings[subtag].prefix === subtags[0]) {
+        subtags.shift();
+        i--;
+      }
+    }
+    subtags[i] = subtag;
+    i++;
+  }
+  var normal = subtags.slice(0, i).join("-");
+
+  // Extension sequences are sorted by their singleton characters.
+  // "u-ca-chinese-t-zh-latn" -> "t-zh-latn-u-ca-chinese"
+  var extensions = [];
+  while (i < subtags.length && subtags[i] !== "x") {
+    var extensionStart = i;
+    i++;
+    while (i < subtags.length && subtags[i].length > 1)
+      i++;
+    var extension = sybtags.slice(extensionStart, i).join("-");
+    extensions.push(extension);
+  }
+  extensions.sort();
+
+  // Private use sequences are left as is. "x-private"
+  var privateUse = "";
+  if (i < subtags.length)
+    privateUse = subtags.slice(i).join("-");
+
+  // Put everything back together.
+  var canonical = normal;
+  if (extensions.length > 0)
+    canonical += "-" + extensions.join("-");
+  if (privateUse.length > 0) {
+    // Be careful of a Language-Tag that is entirely privateuse.
+    if (canonical.length > 0)
+      canonical += "-" + privateUse;
+    else
+      canonical = privateUse;
   }
 
-  supportedLocales.add(def);
-  return supportedLocales;
+  return canonical;
 }
 
-function getDirection(code) {
-  const tag = code.split('-')[0];
-  return ['ar', 'he', 'fa', 'ps', 'ur'].indexOf(tag) >= 0 ?
-    'rtl' : 'ltr';
-}
-
+/**
+ * Canonicalizes a locale list.
+ *
+ * Spec: ECMAScript Internationalization API Specification, 9.2.1.
+ */
 function CanonicalizeLocaleList(locales) {
-  if (locales === undefined) {
+  if (locales === undefined)
     return [];
-  }
-  const seen = [];
-  if (typeof locales === 'string') {
+  var seen = [];
+  if (typeof locales === "string")
     locales = [locales];
-  }
-  const O = locales;
-  const len = O.length;
-  let k = 0;
+  var O = locales;
+  var len = O.length;
+  var k = 0;
   while (k < len) {
-    let tag = O[k];
-    tag = tag.toLowerCase();
-    if (seen.indexOf(tag) === -1) {
-      seen.push(tag);
+    // Don't call ToString(k) - SpiderMonkey is faster with integers.
+    var kPresent = k in O;
+    if (kPresent) {
+      var kValue = O[k];
+      if (!(typeof kValue === "string" || typeof kValue === "object"))
+        ThrowError(JSMSG_INVALID_LOCALES_ELEMENT);
+      var tag = kValue;
+      if (!IsStructurallyValidLanguageTag(tag))
+        ThrowError(JSMSG_INVALID_LANGUAGE_TAG, tag);
+      tag = CanonicalizeLanguageTag(tag);
+      if (seen.indexOf(tag) === -1)
+        seen.push(tag);
     }
     k++;
   }
   return seen;
 }
 
-function PrioritizeLocales(availableLocales,
-  requestedLocales,
-  defaultLocale) {
-
-  let array = new Array();
-  if (typeof availableLocales === 'object') {
-    const iter = availableLocales.values();
-    for (let z = 0; z < availableLocales.size; z++) {
-      array.push(iter.next().value);
-    }
-  } else {
-    array = availableLocales.slice();
+/**
+ * Compares a BCP 47 language tag against the locales in availableLocales
+ * and returns the best available match. Uses the fallback
+ * mechanism of RFC 4647, section 3.4.
+ *
+ * Spec: ECMAScript Internationalization API Specification, 9.2.2.
+ * Spec: RFC 4647, section 3.4.
+ */
+function BestAvailableLocale(availableLocales, locale) {
+  var candidate = locale;
+  while (true) {
+    if (availableLocales.indexOf(candidate) !== -1)
+      return candidate;
+    var pos = candidate.lastIndexOf('-');
+    if (pos === -1)
+      return undefined;
+    if (pos >= 2 && candidate[pos - 2] === "-")
+      pos -= 2;
+    candidate = candidate.substring(0, pos);
   }
-
-  availableLocales = CanonicalizeLocaleList(array);
-  requestedLocales = CanonicalizeLocaleList(requestedLocales);
-
-  const result = LookupAvailableLocales(availableLocales, requestedLocales);
-  if (defaultLocale) {
-    // if default locale is not present in result,
-    // add it to the end of fallback chain
-    defaultLocale = defaultLocale.toLowerCase();
-    if (result.indexOf(defaultLocale) === -1) {
-      result.push(defaultLocale);
-    }
-  }
-
-  for (let i = 0; i < result.length; i++) {
-    array = result[i].split('-');
-    if (array.length === 2) {
-      result[i] = `${array[0]}-${array[1].toUpperCase()}`;
-    }
-  }
-
-  return result;
 }
 
+/**
+ * Returns the subset of availableLocales for which requestedLocales has a
+ * matching (possibly fallback) locale. Locales appear in the same order in the
+ * returned list as in the input list.
+ *
+ * This function is a slight modification of the LookupSupprtedLocales algorithm
+ * The difference is in step 4d where instead of adding requested locale,
+ * we're adding availableLocale to the subset.
+ *
+ * This allows us to directly use returned subset to pool resources.
+ *
+ * Spec: ECMAScript Internationalization API Specification, 9.2.6.
+ */
 function LookupAvailableLocales(availableLocales, requestedLocales) {
   // Steps 1-2.
-  const len = requestedLocales.length;
-  const subset = [];
+  var len = requestedLocales.length;
+  var subset = [];
 
   // Steps 3-4.
-  let k = 0;
+  var k = 0;
   while (k < len) {
     // Steps 4.a-b.
-    const locale = requestedLocales[k];
+    var locale = requestedLocales[k];
+    var noExtensionsLocale = locale.replace(unicodeLocaleExtensionSequenceGlobalRE, "");
 
     // Step 4.c-d.
-    const availableLocale = BestAvailableLocale(availableLocales, locale);
-    if (availableLocale !== undefined) {
+    var availableLocale = BestAvailableLocale(availableLocales, noExtensionsLocale);
+    if (availableLocale !== undefined)
       // in LookupSupportedLocales it pushes locale here
       subset.push(availableLocale);
-    }
+
     // Step 4.e.
     k++;
   }
@@ -2080,215 +2420,36 @@ function LookupAvailableLocales(availableLocales, requestedLocales) {
   return subset.slice(0);
 }
 
-function BestAvailableLocale(availableLocales, locale) {
-  let candidate = locale;
-  while (true) {
-    if (availableLocales.indexOf(candidate) !== -1) {
-      return candidate;
-    }
-    let pos = candidate.lastIndexOf('-');
-    if (pos === -1) {
-      return undefined;
-    }
-    if (pos >= 2 && candidate[pos - 2] === '-') {
-      pos -= 2;
-    }
-    candidate = candidate.substring(0, pos);
+
+function prioritizeLocales(
+  availableLocales,
+  requestedLocales,
+  defaultLocale
+) {
+  availableLocales = CanonicalizeLocaleList(availableLocales);
+  requestedLocales = CanonicalizeLocaleList(requestedLocales);
+
+  const result = LookupAvailableLocales(availableLocales, requestedLocales);
+
+  if (!defaultLocale) {
+    return result;
   }
-}
 
-/**
- * @private
- *
- * This function is an inner function for `Localization.formatWithFallback`.
- *
- * It takes a `MessageContext`, list of l10n-ids and a method to be used for
- * key resolution (either `valueFromContext` or `entityFromContext`) and
- * optionally a value returned from `keysFromContext` executed against
- * another `MessageContext`.
- *
- * The idea here is that if the previous `MessageContext` did not resolve
- * all keys, we're calling this function with the next context to resolve
- * the remaining ones.
- *
- * In the function, we loop oer `keys` and check if we have the `prev`
- * passed and if it has an error entry for the position we're in.
- *
- * If it doesn't, it means that we have a good translation for this key and
- * we return it. If it does, we'll try to resolve the key using the passed
- * `MessageContext`.
- *
- * In the end, we return an Object with resolved translations, errors and
- * a boolean indicating if there were any errors found.
- *
- * The translations are either strings, if the method is `valueFromContext`
- * or objects with value and attributes if the method is `entityFromContext`.
- *
- * See `Localization.formatWithFallback` for more info on how this is used.
- *
- * @param {MessageContext} ctx
- * @param {Array<string>}  keys
- * @param {Function}       method
- * @param {{
- *   errors: Array<Error>,
- *   hasErrors: boolean,
- *   translations: Array<string>|Array<{value: string, attrs: Object}>}} prev
- *
- * @returns {{
- *   errors: Array<Error>,
- *   hasErrors: boolean,
- *   translations: Array<string>|Array<{value: string, attrs: Object}>}}
- */
-function keysFromContext(method, sanitizeArgs, ctx, keys, prev) {
-  const entityErrors = [];
-  const result = {
-    errors: new Array(keys.length),
-    withoutFatal: new Array(keys.length),
-    hasFatalErrors: false,
-  };
-
-  result.translations = keys.map((key, i) => {
-    // Use a previously formatted good value if it had no errors.
-    if (prev && !prev.errors[i] ) {
-      return prev.translations[i];
-    }
-
-    // Clear last entity's errors.
-    entityErrors.length = 0;
-    const args = sanitizeArgs(key[1]);
-    const translation = method(ctx, entityErrors, key[0], args);
-
-    // No errors still? Use this translation as fallback to the previous one
-    // which had errors.
-    if (entityErrors.length === 0) {
-      return translation;
-    }
-
-    // The rest of this function handles the scenario in which the translation
-    // was formatted with errors.  Copy the errors to the result object so that
-    // the Localization can handle them (e.g. console.warn about them).
-    result.errors[i] = entityErrors.slice();
-
-    // Formatting errors are not fatal and the translations are usually still
-    // usable and can be good fallback values.  Fatal errors should signal to
-    // the Localization that another fallback should be loaded.
-    if (!entityErrors.some(isL10nError)) {
-      result.withoutFatal[i] = true;
-    } else if (!result.hasFatalErrors) {
-      result.hasFatalErrors = true;
-    }
-
-    // Use the previous translation for this `key` even if it had formatting
-    // errors.  This is usually closer the user's preferred language anyways.
-    if (prev && prev.withoutFatal[i]) {
-      // Mark this previous translation as a good potential fallback value in
-      // case of further fallbacks.
-      result.withoutFatal[i] = true;
-      return prev.translations[i];
-    }
-
-    // If no good or almost good previous translation is available, return the
-    // current translation.  In case of minor errors it's a partially
-    // formatted translation.  In the worst-case scenario it an identifier of
-    // the requested entity.
-    return translation;
-  });
+  // if default locale is not present in result,
+  // add it to the end of fallback chain
+  defaultLocale = CanonicalizeLanguageTag(defaultLocale);
+  if (result.indexOf(defaultLocale) === -1) {
+    result.push(defaultLocale);
+  }
 
   return result;
 }
 
-/**
- * @private
- *
- * This function is passed as a method to `keysFromContext` and resolve
- * a value of a single L10n Entity using provided `MessageContext`.
- *
- * If the function fails to retrieve the entity, it will return an ID of it.
- * If formatting fails, it will return a partially resolved entity.
- *
- * In both cases, an error is being added to the errors array.
- *
- * @param   {MessageContext} ctx
- * @param   {Array<Error>}   errors
- * @param   {string}         id
- * @param   {Object}         args
- * @returns {string}
- */
-function valueFromContext(ctx, errors, id, args) {
-  const entity = ctx.messages.get(id);
 
-  if (entity === undefined) {
-    errors.push(new L10nError(`Unknown entity: ${id}`));
-    return id;
-  }
-
-  return ctx.format(entity, args, errors);
-}
-
-/**
- * @private
- *
- * This function is passed as a method to `keysFromContext` and resolve
- * a single L10n Entity using provided `MessageContext`.
- *
- * The function will return an object with a value and attributes of the
- * entity.
- *
- * If the function fails to retrieve the entity, the value is set to the ID of
- * an entity, and attrs to `null`. If formatting fails, it will return
- * a partially resolved value and attributes.
- *
- * In both cases, an error is being added to the errors array.
- *
- * @param   {MessageContext} ctx
- * @param   {Array<Error>}   errors
- * @param   {String}         id
- * @param   {Object}         args
- * @returns {Object}
- */
-function entityFromContext(ctx, errors, id, args) {
-  const entity = ctx.messages.get(id);
-
-  if (entity === undefined) {
-    errors.push(new L10nError(`Unknown entity: ${id}`));
-    return { value: id, attrs: null };
-  }
-
-  const formatted = {
-    value: ctx.format(entity, args, errors),
-    attrs: null,
-  };
-
-  if (entity.traits) {
-    formatted.attrs = [];
-    for (let i = 0, trait; (trait = entity.traits[i]); i++) {
-      if (!trait.key.hasOwnProperty('ns')) {
-        continue;
-      }
-      const attr = ctx.format(trait, args, errors);
-      if (attr !== null) {
-        formatted.attrs.push([
-          trait.key.ns,
-          trait.key.name,
-          attr
-        ]);
-      }
-    }
-  }
-
-  return formatted;
-}
-
-/**
- * @private
- *
- * Test if an error is an instance of L10nError.
- *
- * @param   {Error}   error
- * @returns {boolean}
- */
-function isL10nError(error) {
-  return error instanceof L10nError;
+function getDirection(code) {
+  const tag = code.split('-')[0];
+  return ['ar', 'he', 'fa', 'ps', 'ur'].indexOf(tag) >= 0 ?
+    'rtl' : 'ltr';
 }
 
 const properties = new WeakMap();
@@ -2415,7 +2576,9 @@ class Localization {
       return prev.translations;
     }
 
-    const current = method(ctx, keys, prev);
+    const current = keysFromContext(
+      method, this.sanitizeArgs, ctx, keys, prev
+    );
 
     // In Gecko `console` needs to imported explicitly.
     if (typeof console !== 'undefined') {
@@ -2477,7 +2640,7 @@ class Localization {
   formatEntities(keys) {
     return this.interactive.then(
       bundles => this.formatWithFallback(
-        bundles, contexts.get(bundles[0]), keys, entitiesFromContext
+        bundles, contexts.get(bundles[0]), keys, this.entityFromContext
       )
     );
   }
@@ -2508,7 +2671,7 @@ class Localization {
     );
     return this.interactive.then(
       bundles => this.formatWithFallback(
-        bundles, contexts.get(bundles[0]), keyTuples, valuesFromContext
+        bundles, contexts.get(bundles[0]), keyTuples, this.valueFromContext
       )
     );
   }
@@ -2541,6 +2704,109 @@ class Localization {
     );
   }
 
+  /**
+   * Sanitize external arguments.
+   *
+   * Subclasses of `Localization` can override this method to provide
+   * environment-specific sanitization of arguments passed into translations.
+   *
+   * @param   {Object} args
+   * @returns {Object}
+   * @private
+   */
+  sanitizeArgs(args) {
+    return args;
+  }
+
+  /**
+   * Format all public values of a message into a { value, attrs } object.
+   *
+   * This function is passed as a method to `keysFromContext` and resolve
+   * a single L10n Entity using provided `MessageContext`.
+   *
+   * The function will return an object with a value and attributes of the
+   * entity.
+   *
+   * If the function fails to retrieve the entity, the value is set to the ID of
+   * an entity, and attrs to `null`. If formatting fails, it will return
+   * a partially resolved value and attributes.
+   *
+   * In both cases, an error is being added to the errors array.
+   *
+   * Subclasses of `Localization` can override this method to provide
+   * environment-specific formatting behavior.
+   *
+   * @param   {MessageContext} ctx
+   * @param   {Array<Error>}   errors
+   * @param   {String}         id
+   * @param   {Object}         args
+   * @returns {Object}
+   * @private
+   */
+  entityFromContext(ctx, errors, id, args) {
+    const entity = ctx.messages.get(id);
+
+    if (entity === undefined) {
+      errors.push(new L10nError(`Unknown entity: ${id}`));
+      return { value: id, attrs: null };
+    }
+
+    const formatted = {
+      value: ctx.format(entity, args, errors),
+      attrs: null,
+    };
+
+    if (entity.traits) {
+      formatted.attrs = [];
+      for (let i = 0, trait; (trait = entity.traits[i]); i++) {
+        if (!trait.key.hasOwnProperty('ns')) {
+          continue;
+        }
+        const attr = ctx.format(trait, args, errors);
+        if (attr !== null) {
+          formatted.attrs.push([
+            trait.key.ns,
+            trait.key.name,
+            attr
+          ]);
+        }
+      }
+    }
+
+    return formatted;
+  }
+
+  /**
+   * Format the value of a message into a string.
+   *
+   * This function is passed as a method to `keysFromContext` and resolve
+   * a value of a single L10n Entity using provided `MessageContext`.
+   *
+   * If the function fails to retrieve the entity, it will return an ID of it.
+   * If formatting fails, it will return a partially resolved entity.
+   *
+   * In both cases, an error is being added to the errors array.
+   *
+   * Subclasses of `Localization` can override this method to provide
+   * environment-specific formatting behavior.
+   *
+   * @param   {MessageContext} ctx
+   * @param   {Array<Error>}   errors
+   * @param   {string}         id
+   * @param   {Object}         args
+   * @returns {string}
+   * @private
+   */
+  valueFromContext(ctx, errors, id, args) {
+    const entity = ctx.messages.get(id);
+
+    if (entity === undefined) {
+      errors.push(new L10nError(`Unknown entity: ${id}`));
+      return id;
+    }
+
+    return ctx.format(entity, args, errors);
+  }
 }
 
 /**
@@ -2586,77 +2852,118 @@ function equal(bundles1, bundles2) {
     bundles1.every(({lang}, i) => lang === bundles2[i].lang);
 }
 
-// A regexp to sanitize HTML tags and entities.
-const reHtml = /[&<>]/g;
-const htmlEntities = {
-  '&': '&amp;',
-  '<': '&lt;',
-  '>': '&gt;',
-};
-
-// Unicode bidi isolation characters.
-//const FSI = '\u2068';
-//const PDI = '\u2069';
-
 /**
- * Sanitize string-typed arguments.
- *
- * Escape HTML tags and entities and wrap values in the Unicode Isolation Marks
- * (FSI and PDI) to ensure the proper directionality of the interpolated text.
- *
- * @param   {Object} args
- * @returns {Object}
  * @private
+ *
+ * This function is an inner function for `Localization.formatWithFallback`.
+ *
+ * It takes a `MessageContext`, list of l10n-ids and a method to be used for
+ * key resolution (either `valueFromContext` or `entityFromContext`) and
+ * optionally a value returned from `keysFromContext` executed against
+ * another `MessageContext`.
+ *
+ * The idea here is that if the previous `MessageContext` did not resolve
+ * all keys, we're calling this function with the next context to resolve
+ * the remaining ones.
+ *
+ * In the function, we loop oer `keys` and check if we have the `prev`
+ * passed and if it has an error entry for the position we're in.
+ *
+ * If it doesn't, it means that we have a good translation for this key and
+ * we return it. If it does, we'll try to resolve the key using the passed
+ * `MessageContext`.
+ *
+ * In the end, we return an Object with resolved translations, errors and
+ * a boolean indicating if there were any errors found.
+ *
+ * The translations are either strings, if the method is `valueFromContext`
+ * or objects with value and attributes if the method is `entityFromContext`.
+ *
+ * See `Localization.formatWithFallback` for more info on how this is used.
+ *
+ * @param {MessageContext} ctx
+ * @param {Array<string>}  keys
+ * @param {Function}       method
+ * @param {{
+ *   errors: Array<Error>,
+ *   withoutFatal: Array<boolean>,
+ *   hasFatalErrors: boolean,
+ *   translations: Array<string>|Array<{value: string, attrs: Object}>}} prev
+ *
+ * @returns {{
+ *   errors: Array<Error>,
+ *   withoutFatal: Array<boolean>,
+ *   hasFatalErrors: boolean,
+ *   translations: Array<string>|Array<{value: string, attrs: Object}>}}
  */
-function sanitizeArgs(args) {
-  for (const name in args) {
-    const arg = args[name];
-    if (typeof arg === 'string') {
-      const value = arg.replace(reHtml, match => htmlEntities[match]);
-      args[name] = value;
+function keysFromContext(method, sanitizeArgs, ctx, keys, prev) {
+  const entityErrors = [];
+  const result = {
+    errors: new Array(keys.length),
+    withoutFatal: new Array(keys.length),
+    hasFatalErrors: false,
+  };
+
+  result.translations = keys.map((key, i) => {
+    // Use a previously formatted good value if it had no errors.
+    if (prev && !prev.errors[i] ) {
+      return prev.translations[i];
     }
-  }
-  return args;
+
+    // Clear last entity's errors.
+    entityErrors.length = 0;
+    const args = sanitizeArgs(key[1]);
+    const translation = method(ctx, entityErrors, key[0], args);
+
+    // No errors still? Use this translation as fallback to the previous one
+    // which had errors.
+    if (entityErrors.length === 0) {
+      return translation;
+    }
+
+    // The rest of this function handles the scenario in which the translation
+    // was formatted with errors.  Copy the errors to the result object so that
+    // the Localization can handle them (e.g. console.warn about them).
+    result.errors[i] = entityErrors.slice();
+
+    // Formatting errors are not fatal and the translations are usually still
+    // usable and can be good fallback values.  Fatal errors should signal to
+    // the Localization that another fallback should be loaded.
+    if (!entityErrors.some(isL10nError)) {
+      result.withoutFatal[i] = true;
+    } else if (!result.hasFatalErrors) {
+      result.hasFatalErrors = true;
+    }
+
+    // Use the previous translation for this `key` even if it had formatting
+    // errors.  This is usually closer the user's preferred language anyways.
+    if (prev && prev.withoutFatal[i]) {
+      // Mark this previous translation as a good potential fallback value in
+      // case of further fallbacks.
+      result.withoutFatal[i] = true;
+      return prev.translations[i];
+    }
+
+    // If no good or almost good previous translation is available, return the
+    // current translation.  In case of minor errors it's a partially
+    // formatted translation.  In the worst-case scenario it an identifier of
+    // the requested entity.
+    return translation;
+  });
+
+  return result;
 }
 
 /**
- * A bound version of `keysFromContext` using `entityFromContext`.
- *
- * @param {MessageContext} ctx
- * @param {Array<Array>}   keys
- * @param {{
- *   errors: Array<Error>,
- *   hasErrors: boolean,
- *   translations: Array<{value: string, attrs: Object}>
- * }} prev
- * @returns {{
- *   errors: Array<Error>,
- *   hasErrors: boolean,
- *   translations: Array<{value: string, attrs: Object}>
- * }}
  * @private
- */
-function entitiesFromContext(ctx, keys, prev) {
-  return keysFromContext(entityFromContext, sanitizeArgs, ctx, keys, prev);
-}
-
-/**
- * A bound version of `keysFromContext` using `valueFromContext`.
  *
- * @param {MessageContext} ctx
- * @param {Array<Array>}   keys
- * @param {{
- *   errors: Array<Error>,
- *   hasErrors: boolean,
- *   translations: Array<string>}} prev
- * @returns {{
- *   errors: Array<Error>,
- *   hasErrors: boolean,
- *   translations: Array<string>}}
- * @private
+ * Test if an error is an instance of L10nError.
+ *
+ * @param   {Error}   error
+ * @returns {boolean}
  */
-function valuesFromContext(ctx, keys, prev) {
-  return keysFromContext(valueFromContext, sanitizeArgs, ctx, keys, prev);
+function isL10nError(error) {
+  return error instanceof L10nError;
 }
 
 // Match the opening angle bracket (<) in HTML tags, and HTML entities like
@@ -2701,10 +3008,6 @@ const ALLOWED_ATTRIBUTES = {
 const DOM_NAMESPACES = {
   'html': 'http://www.w3.org/1999/xhtml',
   'xul': 'http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul',
-
-  // Reverse map for overlays.
-  'http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul': 'xul',
-  'http://www.w3.org/1999/xhtml': 'html',
 };
 
 
@@ -2733,11 +3036,14 @@ function overlayElement(element, translation) {
     }
   }
 
-  for (const key in translation.attrs) {
-    const [ns, name] =
-      key.includes('/') ? key.split('/', 2) : [null, key];
-    if (isAttrAllowed({ ns, name }, element)) {
-      element.setAttribute(name, translation.attrs[key]);
+  if (translation.attrs === null) {
+    return;
+  }
+
+  for (const [ns, name, val] of translation.attrs) {
+    if (DOM_NAMESPACES[ns] === element.namespaceURI &&
+        isAttrAllowed({ name }, element)) {
+      element.setAttribute(name, val);
     }
   }
 }
@@ -2802,10 +3108,7 @@ function overlay(sourceElement, translationElement) {
   // cleared if a new language doesn't use them; https://bugzil.la/922577
   if (translationElement.attributes) {
     for (k = 0, attr; (attr = translationElement.attributes[k]); k++) {
-      if (isAttrAllowed({
-        ns: DOM_NAMESPACES[translationElement.namespaceURI],
-        name: attr.name
-      }, sourceElement)) {
+      if (isAttrAllowed(attr, sourceElement)) {
         sourceElement.setAttribute(attr.name, attr.value);
       }
     }
@@ -2844,10 +3147,6 @@ function isElementAllowed(element) {
  * @private
  */
 function isAttrAllowed(attr, element) {
-  // Does it have a namespace that matches the element's?
-  if (attr.ns === null || DOM_NAMESPACES[attr.ns] !== element.namespaceURI) {
-    return false;
-  }
   const allowed = ALLOWED_ATTRIBUTES[element.namespaceURI];
   if (!allowed) {
     return false;
@@ -2913,83 +3212,32 @@ function getIndexOfType(element) {
   return index;
 }
 
-const observerConfig = {
-  attributes: true,
-  characterData: false,
-  childList: true,
-  subtree: true,
-  attributeFilter: ['data-l10n-id', 'data-l10n-args', 'data-l10n-bundle']
+// A regexp to sanitize HTML tags and entities.
+const reHtml = /[&<>]/g;
+const htmlEntities = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
 };
 
 /**
- * The `LocalizationObserver` class is responsible for localizing DOM trees.
- * It also implements the iterable protocol which allows iterating over and
- * retrieving available `Localization` objects.
- *
- * Each `document` will have its corresponding `LocalizationObserver` instance
- * created automatically on startup, as `document.l10n`.
+ * The `DOMLocalization` class localizes DOM trees.
  */
-class LocalizationObserver {
+class DOMLocalization extends Localization {
   /**
-   * @returns {LocalizationObserver}
+   * @param   {Function}             requestBundles
+   * @param   {Function}             createContext
+   * @param   {string}               name
+   * @param   {DocumentLocalization} [observer]
+   * @returns {DOMLocalization}
    */
-  constructor() {
-    this.localizations = new Map();
-    this.roots = new WeakMap();
-    this.observer = new MutationObserver(
-      mutations => this.translateMutations(mutations)
-    );
-  }
+  constructor(requestBundles, createContext, name, observer) {
+    super(requestBundles, createContext);
 
-  /**
-   * Test if the `Localization` object with a given name already exists.
-   *
-   * ```javascript
-   * if (document.l10n.has('extra')) {
-   *   const extraLocalization = document.l10n.get('extra');
-   * }
-   * ```
-   * @param   {string} name - key for the object
-   * @returns {boolean}
-   */
-  has(name) {
-    return this.localizations.has(name);
-  }
-
-  /**
-   * Retrieve a reference to the `Localization` object by name.
-   *
-   * ```javascript
-   * const mainLocalization = document.l10n.get('main');
-   * const extraLocalization = document.l10n.get('extra');
-   * ```
-   *
-   * @param   {string}        name - key for the object
-   * @returns {Localization}
-   */
-  get(name) {
-    return this.localizations.get(name);
-  }
-
-  /**
-   * Sets a reference to the `Localization` object by name.
-   *
-   * ```javascript
-   * const loc = new Localization();
-   * document.l10n.set('extra', loc);
-   * ```
-   *
-   * @param   {string}       name - key for the object
-   * @param   {Localization} value - `Localization` object
-   * @returns {LocalizationObserver}
-   */
-  set(name, value) {
-    this.localizations.set(name, value);
-    return this;
-  }
-
-  *[Symbol.iterator]() {
-    yield* this.localizations;
+    this.name = name;
+    this.query = `[data-l10n-with=${name}]`;
+    this.roots = new Set();
+    this.observer = observer;
   }
 
   handleEvent() {
@@ -3001,18 +3249,15 @@ class LocalizationObserver {
    * Returns a promise with the negotiated array of language objects as above.
    *
    * ```javascript
-   * document.l10n.requestLanguages(['de-DE', 'de', 'en-US']);
+   * localization.requestLanguages(['de-DE', 'de', 'en-US']);
    * ```
    *
    * @param   {Array<string>} requestedLangs - array of requested languages
    * @returns {Promise<Array<string>>}
    */
   requestLanguages(requestedLangs) {
-    const localizations = Array.from(this.localizations.values());
-    return Promise.all(
-      localizations.map(l10n => l10n.requestLanguages(requestedLangs))
-    ).then(
-      () => this.translateAllRoots()
+    super.requestLanguages(requestedLangs).then(
+      () => this.translateRoots()
     );
   }
 
@@ -3029,7 +3274,7 @@ class LocalizationObserver {
    * preferences.
    *
    * ```javascript
-   * document.l10n.setAttributes(
+   * localization.setAttributes(
    *   document.querySelector('#welcome'), 'hello', { who: 'world' }
    * );
    * ```
@@ -3061,7 +3306,7 @@ class LocalizationObserver {
    * Get the `data-l10n-*` attributes from DOM elements.
    *
    * ```javascript
-   * document.l10n.getAttributes(
+   * localization.getAttributes(
    *   document.querySelector('#welcome')
    * );
    * // -> { id: 'hello', args: { who: 'world' } }
@@ -3078,119 +3323,82 @@ class LocalizationObserver {
   }
 
   /**
-   * Add a new root to the list of observed ones.
+   * Add `root` to the list of roots managed by this `DOMLocalization`.
+   *
+   * Additionally, if this `DOMLocalization` has an observer, start observing
+   * `root` in order to translate mutations in it.
    *
    * @param {Element}      root - Root to observe.
-   * @param {Localization} l10n - `Localization` object
    */
-  observeRoot(root, l10n = this.get('main')) {
-    if (!this.roots.has(l10n)) {
-      this.roots.set(l10n, new Set());
+  connectRoot(root) {
+    this.roots.add(root);
+
+    if (this.observer) {
+      this.observer.observeRoot(root);
     }
-    this.roots.get(l10n).add(root);
-    this.observer.observe(root, observerConfig);
   }
 
   /**
-   * Remove a root from the list of observed ones.
-   * If the root is the last to be associated with a given `Localization` object
-   * the `Localization` object association will also be removed.
+   * Remove `root` from the list of roots managed by this `DOMLocalization`.
    *
-   * Returns `true` if the root was the last one associated with at least
-   * one `Localization` object.
+   * Additionally, if this `DOMLocalization` has an observer, stop observing
+   * `root`.
+   *
+   * Returns `true` if the root was the last one managed by this
+   * `DOMLocalization`.
    *
    * @param   {Element} root - Root to disconnect.
    * @returns {boolean}
    */
   disconnectRoot(root) {
-    let wasLast = false;
+    this.roots.delete(root);
 
-    this.pause();
-    for (const [name, l10n] of this.localizations) {
-      const roots = this.roots.get(l10n);
-      if (roots && roots.has(root)) {
-        roots.delete(root);
-        if (roots.size === 0) {
-          wasLast = true;
-          this.localizations.delete(name);
-          this.roots.delete(l10n);
-        }
-      }
+    if (this.observer) {
+      this.observer.unobserveRoot(root);
     }
-    this.resume();
 
-    return wasLast;
+    return this.roots.size === 0;
   }
 
   /**
-   * Pauses the `MutationObserver`
-   */
-  pause() {
-    this.observer.disconnect();
-  }
-
-  /**
-   * Resumes the `MutationObserver`
-   */
-  resume() {
-    for (const l10n of this.localizations.values()) {
-      if (this.roots.has(l10n)) {
-        for (const root of this.roots.get(l10n)) {
-          this.observer.observe(root, observerConfig);
-        }
-      }
-    }
-  }
-
-  /**
-   * Triggers translation of all roots associated with the
-   * `LocalizationObserver`.
-   *
-   * Returns a `Promise` which is resolved once all translations are
-   * completed.
+   * Translate all roots associated with this `DOMLocalization`.
    *
    * @returns {Promise}
    */
-  translateAllRoots() {
-    const localizations = Array.from(this.localizations.values());
+  translateRoots() {
+    const roots = Array.from(this.roots);
     return Promise.all(
-      localizations.map(
-        l10n => this.translateRoots(l10n)
-      )
+      roots.map(root => this.translateRoot(root))
     );
   }
 
-  translateRoots(l10n) {
-    if (!this.roots.has(l10n)) {
-      return Promise.resolve();
-    }
+  /**
+   * Translate `root`.
+   *
+   * This is similar to `translateFragment` but it will also set the `lang` and
+   * `dir` attribute on `root`.  In XUL documents, the anonymous content
+   * attached to `root` will also be translated.
+   *
+   * @returns {Promise}
+   */
+  translateRoot(root) {
+    return this.translateRootContent(root).then(
+      () => this.interactive
+    ).then(bundles => {
+      const langs = bundles.map(bundle => bundle.lang);
+      const wasLocalizedBefore = root.hasAttribute('langs');
 
-    const roots = Array.from(this.roots.get(l10n));
-    return Promise.all(
-      roots.map(root => this.translateRoot(root, l10n))
-    );
-  }
+      root.setAttribute('langs', langs.join(' '));
+      root.setAttribute('lang', langs[0]);
+      root.setAttribute('dir', getDirection(langs[0]));
 
-  translateRoot(root, l10n) {
-    function setLangs() {
-      return l10n.interactive.then(bundles => {
-        const langs = bundles.map(bundle => bundle.lang);
-        const wasLocalizedBefore = root.hasAttribute('langs');
-
-        root.setAttribute('langs', langs.join(' '));
-        root.setAttribute('lang', langs[0]);
-        root.setAttribute('dir', getDirection(langs[0]));
-
-        if (wasLocalizedBefore) {
-          root.dispatchEvent(new CustomEvent('DOMRetranslated', {
-            bubbles: false,
-            cancelable: false,
-          }));
-        }
-      });
-    }
-
-    return this.translateRootContent(root).then(setLangs);
+      if (wasLocalizedBefore) {
+        root.dispatchEvent(new CustomEvent('DOMRetranslated', {
+          bubbles: false,
+          cancelable: false,
+        }));
+      }
+    });
   }
 
   translateRootContent(root) {
@@ -3205,6 +3413,234 @@ class LocalizationObserver {
     );
   }
 
+  /**
+   * Translate a DOM element or fragment asynchronously.
+   *
+   * Manually trigger the translation (or re-translation) of a DOM fragment.
+   * Use the `data-l10n-id` and `data-l10n-args` attributes to mark up the DOM
+   * with information about which translations to use.  Only elements with
+   * `data-l10n-with` attribute matching this `DOMLocalization`'s name will be
+   * translated.
+   *
+   * Returns a `Promise` that gets resolved once the translation is complete.
+   *
+   * @param   {DOMFragment} frag - DOMFragment to be translated
+   * @returns {Promise}
+   */
+  translateFragment(frag) {
+    return this.translateElements(this.getTranslatables(frag));
+  }
+
+  translateElements(elements) {
+    if (!elements.length) {
+      return Promise.resolve([]);
+    }
+
+    const keys = elements.map(this.getKeysForElement);
+    return this.formatEntities(keys).then(
+      translations => this.applyTranslations(elements, translations)
+    );
+  }
+
+  /**
+   * Translate a single DOM element asynchronously.
+   *
+   * The element's `data-l10n-with` must match this `DOMLocalization`'s name.
+   *
+   * Returns a `Promise` that gets resolved once the translation is complete.
+   *
+   * @param   {Element} element - HTML element to be translated
+   * @returns {Promise}
+   */
+  translateElement(element) {
+    return this.formatEntities([this.getKeysForElement(element)]).then(
+      translations => this.applyTranslations([element], translations)
+    );
+  }
+
+  applyTranslations(elements, translations) {
+    if (this.observer) {
+      this.observer.pauseObserving();
+    }
+
+    for (let i = 0; i < elements.length; i++) {
+      overlayElement(elements[i], translations[i]);
+    }
+
+    if (this.observer) {
+      this.observer.resumeObserving();
+    }
+  }
+
+  getTranslatables(element) {
+    const nodes = Array.from(element.querySelectorAll(this.query));
+
+    if (typeof element.hasAttribute === 'function' &&
+        element.hasAttribute('data-l10n-id')) {
+      const elemBundleName = element.getAttribute('data-l10n-with');
+      if (elemBundleName === this.name) {
+        nodes.push(element);
+      }
+    }
+
+    return nodes;
+  }
+
+  getKeysForElement(element) {
+    return [
+      element.getAttribute('data-l10n-id'),
+      // In XUL documents missing attributes return `''` here which breaks
+      // JSON.parse.  HTML documents return `null`.
+      JSON.parse(element.getAttribute('data-l10n-args') || null)
+    ];
+  }
+
+  /**
+   * Sanitize arguments.
+   *
+   * Escape HTML tags and entities in string-typed arguments.
+   *
+   * @param   {Object} args
+   * @returns {Object}
+   * @private
+   */
+  sanitizeArgs(args) {
+    for (const name in args) {
+      const arg = args[name];
+      if (typeof arg === 'string') {
+        args[name] = arg.replace(reHtml, match => htmlEntities[match]);
+      }
+    }
+    return args;
+  }
+}
+
+/**
+ * The `DocumentLocalization` class localizes DOM documents.
+ *
+ * A sublcass of `DOMLocalization`, it implements methods for observing DOM
+ * trees with a `MutationObserver`.  It can delegate the translation of DOM
+ * elements marked with `data-l10n-with` to other named `DOMLocalizations`.
+ *
+ * Each `document` will have its corresponding `DocumentLocalization` instance
+ * created automatically on startup, as `document.l10n`.
+ */
+class DocumentLocalization extends DOMLocalization {
+  /**
+   * @returns {DocumentLocalization}
+   */
+  constructor(requestBundles, createContext) {
+    // There can be only one `DocumentLocalization` per document and it's
+    // always called 'main'.
+    super(requestBundles, createContext, 'main');
+
+    // Localize elements with no explicit `data-l10n-with` too.
+    this.query =
+      '[data-l10n-with="main"], [data-l10n-id]:not([data-l10n-with])';
+
+    // A map of named delegate `DOMLocalization` objects.
+    this.delegates = new Map();
+
+    // Used by `DOMLocalization` when connecting/disconnecting roots and for
+    // pausing the `MutationObserver` when translations are applied to the DOM.
+    // `DocumentLocalization` is its own observer because it implements
+    // `observeRoot`, `unobserveRoot`, `pauseObserving` and `resumeObserving`.
+    this.observer = this;
+
+    // A Set of DOM trees observed by the `MutationObserver`.
+    this.observedRoots = new Set();
+    this.mutationObserver = new MutationObserver(
+      mutations => this.translateMutations(mutations)
+    );
+
+    this.observerConfig = {
+      attributes: true,
+      characterData: false,
+      childList: true,
+      subtree: true,
+      attributeFilter: ['data-l10n-id', 'data-l10n-args', 'data-l10n-with']
+    };
+  }
+
+  /**
+   * Trigger the language negotation process for this `DocumentLocalization`
+   * and any `DOMLocalization` objects which it can delegate to.
+   *
+   * Returns a promise which resolves to an array of arrays of negotiated
+   * languages for each `Localization` available in the current document.
+   *
+   * ```javascript
+   * document.l10n.requestLanguages(['de-DE', 'de', 'en-US']);
+   * ```
+   *
+   * @param   {Array<string>} requestedLangs - array of requested languages
+   * @returns {Promise<Array<Array<string>>>}
+   */
+  requestLanguages(requestedLangs) {
+    const requests = [
+      super.requestLanguages(requestedLangs)
+    ].concat(
+      Array.from(
+        this.delegates.values(),
+        delegate => delegate.requestLanguages(requestedLangs)
+      )
+    );
+
+    return Promise.all(requests).then(
+      () => this.translateDocument()
+    );
+  }
+
+  /**
+   * Starting observing `root` with the `MutationObserver`.
+   *
+   * @private
+   */
+  observeRoot(root) {
+    this.observedRoots.add(root);
+    this.mutationObserver.observe(root, this.observerConfig);
+  }
+
+  /**
+   * Stop observing `root` with the `MutationObserver`.
+   *
+   * @private
+   */
+  unobserveRoot(root) {
+    this.observedRoots.delete(root);
+    // Pause and resume the mutation observer to stop observing `root`.
+    this.pauseObserving();
+    this.resumeObserving();
+  }
+
+  /**
+   * Pauses the `MutationObserver`.
+   *
+   * @private
+   */
+  pauseObserving() {
+    this.mutationObserver.disconnect();
+  }
+
+  /**
+   * Resumes the `MutationObserver`.
+   *
+   * @private
+   */
+  resumeObserving() {
+    for (const root of this.observedRoots) {
+      this.mutationObserver.observe(root, this.observerConfig);
+    }
+  }
+
+  /**
+   * Translate mutations detected by the `MutationObserver`.
+   *
+   * The elements in the mutations can use `data-l10n-with` to specify which
+   * `DOMLocalization` should be used for translating them.
+   *
+   * @private
+   */
   translateMutations(mutations) {
     for (const mutation of mutations) {
       switch (mutation.type) {
@@ -3227,41 +3663,67 @@ class LocalizationObserver {
   }
 
   /**
-   * Translate a DOM node or fragment asynchronously.
+   * Triggers translation of all roots associated with this
+   * `DocumentLocalization` and any `DOMLocalization` objects which it can
+   * delegate to.
    *
-   * You can manually trigger translation (or re-translation) of a DOM fragment
-   * with `translateFragment`.  Use the `data-l10n-id` and `data-l10n-args`
-   * attributes to mark up the DOM with information about which translations to
-   * use.
+   * Returns a `Promise` which is resolved once all translations are
+   * completed.
    *
-   * Returns a `Promise` that gets resolved once the translation is complete.
-   *
-   * @param   {DOMFragment} frag - DOMFragment to be translated
    * @returns {Promise}
    */
-  translateFragment(frag) {
+  translateDocument() {
+    const localizations = [this, ...this.delegates.values()];
     return Promise.all(
-      this.groupTranslatablesByLocalization(frag).map(
-        elemsWithL10n => this.translateElements(
-          elemsWithL10n[0], elemsWithL10n[1]
-        )
+      localizations.map(
+        l10n => l10n.translateRoots()
       )
     );
   }
 
-  translateElements(l10n, elements) {
-    if (!elements.length) {
-      return [];
-    }
-
-    const keys = elements.map(this.getKeysForElement);
-    return l10n.formatEntities(keys).then(
-      translations => this.applyTranslations(elements, translations)
+  /**
+   * Translate a DOM element or fragment asynchronously using this
+   * `DocumentLocalization` and any `DOMLocalization` objects which it can
+   * delegate to.
+   *
+   * Manually trigger the translation (or re-translation) of a DOM fragment.
+   * Use the `data-l10n-id` and `data-l10n-args` attributes to mark up the DOM
+   * with information about which translations to use.  Only elements with
+   * `data-l10n-with` attribute matching this `DOMLocalization`'s name will be
+   * translated.
+   *
+   * If `frag` or its descendants use `data-l10n-with`, the specific named
+   * `DOMLocalization` will be used to translate it.  As a special case,
+   * elements without `data-l10n-with` will be localized using this
+   * `DocumentLocalization` (as if they had `data-l10n-with="main"`).
+   *
+   * Returns a `Promise` that gets resolved once the translation is complete.
+   *
+   * @param   {DOMFragment} frag - Element or DocumentFragment to be translated
+   * @returns {Promise}
+   */
+  translateFragment(frag) {
+    const requests = [
+      super.translateFragment(frag)
+    ].concat(
+      Array.from(
+        this.delegates.values(),
+        delegate => delegate.translateFragment(frag)
+      )
     );
+
+    return Promise.all(requests);
   }
 
   /**
-   * Translates a single DOM node asynchronously.
+   * Translate a single DOM element asynchronously using this
+   * `DocumentLocalization` or any `DOMLocalization` objects which it can
+   * delegate to.
+   *
+   * If `element` uses `data-l10n-with`, the specific named `DOMLocalization`
+   * will be used to translate it.  As a special case, an element without
+   * `data-l10n-with` will be localized using this `DocumentLocalization` (as
+   * if it had `data-l10n-with="main"`).
    *
    * Returns a `Promise` that gets resolved once the translation is complete.
    *
@@ -3269,54 +3731,35 @@ class LocalizationObserver {
    * @returns {Promise}
    */
   translateElement(element) {
-    const l10n = this.get(element.getAttribute('data-l10n-bundle') || 'main');
-    return l10n.formatEntities([this.getKeysForElement(element)]).then(
-      translations => this.applyTranslations([element], translations)
+    const name = element.getAttribute('data-l10n-with');
+
+    let l10n;
+    if (!name || name === 'main') {
+      l10n = this;
+    } else if (this.delegates.has(name)) {
+      l10n = this.delegates.get(name);
+    } else {
+      const err = new L10nError(`Unknown Localization: ${name}.`);
+      return Promise.reject(err);
+    }
+
+    return l10n.formatEntities([l10n.getKeysForElement(element)]).then(
+      translations => l10n.applyTranslations([element], translations)
     );
   }
 
-  applyTranslations(elements, translations) {
-    this.pause();
-    for (let i = 0; i < elements.length; i++) {
-      overlayElement(elements[i], translations[i]);
-    }
-    this.resume();
-  }
-
-  groupTranslatablesByLocalization(frag) {
-    const elemsWithL10n = [];
-    for (const loc of this.localizations) {
-      elemsWithL10n.push(
-        [loc[1], this.getTranslatables(frag, loc[0])]
-      );
-    }
-    return elemsWithL10n;
-  }
-
-  getTranslatables(element, bundleName) {
-    const query = bundleName === 'main' ?
-      '[data-l10n-bundle="main"], [data-l10n-id]:not([data-l10n-bundle])' :
-      `[data-l10n-bundle=${bundleName}]`;
-    const nodes = Array.from(element.querySelectorAll(query));
+  getTranslatables(element) {
+    const nodes = Array.from(element.querySelectorAll(this.query));
 
     if (typeof element.hasAttribute === 'function' &&
         element.hasAttribute('data-l10n-id')) {
-      const elemBundleName = element.getAttribute('data-l10n-bundle');
-      if (elemBundleName === null || elemBundleName === bundleName) {
+      const elemBundleName = element.getAttribute('data-l10n-with');
+      if (!elemBundleName || elemBundleName === this.name) {
         nodes.push(element);
       }
     }
 
     return nodes;
-  }
-
-  getKeysForElement(element) {
-    return [
-      element.getAttribute('data-l10n-id'),
-      // In XUL documents missing attributes return `''` here which breaks
-      // JSON.parse.  HTML documents return `null`.
-      JSON.parse(element.getAttribute('data-l10n-args') || null)
-    ];
   }
 }
 
@@ -3379,9 +3822,7 @@ class ResourceBundle {
 // https://github.com/whatwg/html/issues/127
 function documentReady() {
   const rs = document.readyState;
-  // !important
-  // if (rs === 'interactive' || rs === 'completed') {
-  if (rs !== 'loading') {
+  if (rs === 'interactive' || rs === 'completed') {
     return Promise.resolve();
   }
 
@@ -3403,7 +3844,7 @@ function getResourceLinks(elem) {
 }
 
 function getMeta(head) {
-  let availableLangs = new Set();
+  let availableLangs = [];
   let defaultLang = null;
   let appVersion = null;
 
@@ -3418,9 +3859,7 @@ function getMeta(head) {
     const content = meta.getAttribute('content').trim();
     switch (name) {
       case 'availableLanguages':
-        availableLangs = new Set(content.split(',').map(lang => {
-          return lang.trim();
-        }));
+        availableLangs = content.split(',').map(lang => lang.trim());
         break;
       case 'defaultLanguage':
         defaultLang = content;
@@ -3437,46 +3876,55 @@ function getMeta(head) {
   };
 }
 
+// This function is provided to the constructor of `Localization` object and is
+// used to create new `MessageContext` objects for a given `lang` with selected
+// builtin functions.
 function createContext(lang) {
   return new Intl.MessageContext(lang);
 }
 
-document.l10n = new LocalizationObserver();
-window.addEventListener('languagechange', document.l10n);
-
-documentReady().then(() => {
-  const { defaultLang, availableLangs } = getMeta(document.head);
-  for (const [name, resIds] of getResourceLinks(document.head)) {
-    if (!document.l10n.has(name)) {
-      createLocalization(name, resIds, defaultLang, availableLangs);
-    }
-  }
-});
-
-function createLocalization(name, resIds, defaultLang, availableLangs) {
-
-  function requestBundles(
-    requestedLangs = new Set(PrioritizeLocales(availableLangs,
-      navigator.languages.slice(),defaultLang))) {
+// Called for every named Localization declared via <link name=…> elements.
+function createLocalization(defaultLang, availableLangs, resIds, name) {
+  // This function is called by `Localization` class to retrieve an array of
+  // `ResourceBundle`s.
+  function requestBundles(requestedLangs = navigator.languages) {
     const newLangs = prioritizeLocales(
-      defaultLang, availableLangs, requestedLangs
+      availableLangs, requestedLangs, defaultLang
     );
 
-    const bundles = [];
-    newLangs.forEach(lang => {
-      bundles.push(new ResourceBundle(lang, resIds));
-    });
+    const bundles = newLangs.map(
+      lang => new ResourceBundle(lang, resIds)
+    );
+
     return Promise.resolve(bundles);
   }
 
-  const l10n = new Localization(requestBundles, createContext);
-  document.l10n.set(name, l10n);
-
   if (name === 'main') {
-    const rootElem = document.documentElement;
-    document.l10n.observeRoot(rootElem, l10n);
-    document.l10n.translateRoot(rootElem, l10n);
+    document.l10n = new DocumentLocalization(requestBundles, createContext);
+    document.l10n.ready = documentReady().then(() => {
+      document.l10n.connectRoot(document.documentElement);
+      return document.l10n.translateDocument();
+    }).then(() => {
+      window.addEventListener('languagechange', document.l10n);
+    });
+  } else {
+    // Pass the main Localization, `document.l10n`, as the observer.
+    const l10n = new DOMLocalization(
+      requestBundles, createContext, name, document.l10n
+    );
+    // Add this Localization as a delegate of the main one.
+    document.l10n.delegates.set(name, l10n);
   }
 }
+
+const { defaultLang, availableLangs } = getMeta(document.head);
+
+// Collect all l10n resource links and create `Localization` objects. The
+// 'main' Localization must be declared as the first one.
+getResourceLinks(document.head).forEach(
+  (resIds, name) => createLocalization(
+    defaultLang, availableLangs, resIds, name
+  )
+);
 
 }

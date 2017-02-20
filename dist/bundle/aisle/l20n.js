@@ -4,12 +4,27 @@ class Node {
   constructor() {}
 }
 
-class Resource extends Node {
+class NodeList extends Node {
   constructor(body = [], comment = null) {
     super();
-    this.type = 'Resource';
+    this.type = 'NodeList';
     this.body = body;
     this.comment = comment;
+  }
+}
+
+class Resource extends NodeList {
+  constructor(body = [], comment = null) {
+    super(body, comment);
+    this.type = 'Resource';
+  }
+}
+
+class Section extends NodeList {
+  constructor(key, body = [], comment = null) {
+    super(body, comment);
+    this.type = 'Section';
+    this.key = key;
   }
 }
 
@@ -28,22 +43,13 @@ class Identifier extends Node {
   }
 }
 
-class Section extends Node {
-  constructor(key, body = [], comment = null) {
-    super();
-    this.type = 'Section';
-    this.key = key;
-    this.body = body;
-    this.comment = comment;
-  }
-}
-
 class Pattern extends Node {
-  constructor(source, elements) {
+  constructor(source, elements, quoted = false) {
     super();
     this.type = 'Pattern';
     this.source = source;
     this.elements = elements;
+    this.quoted = quoted;
   }
 }
 
@@ -211,7 +217,7 @@ class L10nError extends Error {
   }
 }
 
-/*eslint no-magic-numbers: [0]*/
+/*  eslint no-magic-numbers: [0]  */
 
 const MAX_PLACEABLES = 100;
 
@@ -235,6 +241,10 @@ function isIdentifierStart(cc) {
  * for runtime performance and generates an optimized entries object.
  */
 class Parser {
+  constructor(withSource = true) {
+    this.withSource = withSource;
+  }
+
   /**
    * @param {string} string
    * @returns {[AST.Resource, []]}
@@ -274,7 +284,7 @@ class Parser {
         const entry = this.getEntry(comment);
 
         // If retrieved entry is a Section, switch the section pointer to it.
-        if (entry.type === 'Section') {
+        if (entry instanceof AST.Section) {
           resource.body.push(entry);
           section = entry.body;
         } else {
@@ -599,9 +609,9 @@ class Parser {
       }
     }
 
-    const pattern = new AST.Pattern(source, content);
-    pattern._quoteDelim = quoteDelimited !== null;
-    return pattern;
+    return new AST.Pattern(
+      this.withSource ? source : null, content, quoteDelimited !== null
+    );
   }
   /* eslint-enable complexity */
 
@@ -1008,8 +1018,8 @@ class Parser {
 }
 
 var parser = {
-  parseResource: function(string) {
-    const parser = new Parser();
+  parseResource: function(string, { withSource = true } = {}) {
+    const parser = new Parser(withSource);
     return parser.getResource(string);
   },
 };

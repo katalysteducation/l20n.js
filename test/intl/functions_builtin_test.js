@@ -15,7 +15,7 @@ describe('Built-in functions', function() {
 
   describe('NUMBER', function(){
     before(function() {
-      ctx = new MessageContext('en-US');
+      ctx = new MessageContext('en-US', { useIsolating: false });
       ctx.addMessages(ftl`
         foo = { NUMBER(1) }
       `);
@@ -29,48 +29,12 @@ describe('Built-in functions', function() {
     });
   });
 
-  describe('PLURAL', function(){
-    before(function() {
-      ctx = new MessageContext('en-US');
-      ctx.addMessages(ftl`
-        foo = { PLURAL(1) }
-        bar = { PLURAL(1) ->
-            [1]   Bar
-        }
-        baz = { PLURAL(1) ->
-            [one] Baz
-        }
-      `);
-    });
-
-    it('formats the number', function() {
-      const msg = ctx.messages.get('foo');
-      const val = ctx.format(msg, args, errs);
-      assert.equal(val, '1');
-      assert.equal(errs.length, 0);
-    });
-
-    it('matches the number', function() {
-      const msg = ctx.messages.get('bar');
-      const val = ctx.format(msg, args, errs);
-      assert.equal(val, 'Bar');
-      assert.equal(errs.length, 0);
-    });
-
-    it('matches the plural category', function() {
-      const msg = ctx.messages.get('baz');
-      const val = ctx.format(msg, args, errs);
-      assert.equal(val, 'Baz');
-      assert.equal(errs.length, 0);
-    });
-  });
-
   describe('DATETIME', function(){
     let dtf;
 
     before(function() {
       dtf = new Intl.DateTimeFormat('en-US');
-      ctx = new MessageContext('en-US');
+      ctx = new MessageContext('en-US', { useIsolating: false });
       ctx.addMessages(ftl`
         foo = { DATETIME($date) }
       `);
@@ -88,7 +52,7 @@ describe('Built-in functions', function() {
 
   describe('LIST', function(){
     before(function() {
-      ctx = new MessageContext('en-US');
+      ctx = new MessageContext('en-US', { useIsolating: false });
       ctx.addMessages(ftl`
         foo = { LIST("a", "b") }
       `);
@@ -104,7 +68,7 @@ describe('Built-in functions', function() {
 
   describe('LEN', function(){
     before(function() {
-      ctx = new MessageContext('en-US');
+      ctx = new MessageContext('en-US', { useIsolating: false });
       ctx.addMessages(ftl`
         foo = { LEN($arg) }
         bar = { LEN(LIST("a", "b")) }
@@ -128,7 +92,7 @@ describe('Built-in functions', function() {
 
   describe('TAKE', function(){
     before(function() {
-      ctx = new MessageContext('en-US');
+      ctx = new MessageContext('en-US', { useIsolating: false });
       ctx.addMessages(ftl`
         foo = { TAKE(2, $arg) }
         bar = { TAKE(2, LIST("a", "b", "c")) }
@@ -152,7 +116,7 @@ describe('Built-in functions', function() {
 
   describe('DROP', function(){
     before(function() {
-      ctx = new MessageContext('en-US');
+      ctx = new MessageContext('en-US', { useIsolating: false });
       ctx.addMessages(ftl`
         foo = { DROP(2, $arg) }
         bar = { DROP(2, LIST("a", "b", "c")) }

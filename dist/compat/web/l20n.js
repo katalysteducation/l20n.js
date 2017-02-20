@@ -1,6 +1,16 @@
 'use strict';
 
+var _get = function get(object, property, receiver) { if (object === null) object = Function.prototype; var desc = Object.getOwnPropertyDescriptor(object, property); if (desc === undefined) { var parent = Object.getPrototypeOf(object); if (parent === null) { return undefined; } else { return get(parent, property, receiver); } } else if ("value" in desc) { return desc.value; } else { var getter = desc.get; if (getter === undefined) { return undefined; } return getter.call(receiver); } };
+
+var _slicedToArray = function () { function sliceIterator(arr, i) { var _arr = []; var _n = true; var _d = false; var _e = undefined; try { for (var _i = arr[Symbol.iterator](), _s; !(_n = (_s = _i.next()).done); _n = true) { _arr.push(_s.value); if (i && _arr.length === i) break; } } catch (err) { _d = true; _e = err; } finally { try { if (!_n && _i["return"]) _i["return"](); } finally { if (_d) throw _e; } } return _arr; } return function (arr, i) { if (Array.isArray(arr)) { return arr; } else if (Symbol.iterator in Object(arr)) { return sliceIterator(arr, i); } else { throw new TypeError("Invalid attempt to destructure non-iterable instance"); } }; }();
+
+var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
+
 var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; };
+
+function _toConsumableArray(arr) { if (Array.isArray(arr)) { for (var i = 0, arr2 = Array(arr.length); i < arr.length; i++) { arr2[i] = arr[i]; } return arr2; } else { return Array.from(arr); } }
+
+function _defineProperty(obj, key, value) { if (key in obj) { Object.defineProperty(obj, key, { value: value, enumerable: true, configurable: true, writable: true }); } else { obj[key] = value; } return obj; }
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
@@ -9,236 +19,244 @@ function _possibleConstructorReturn(self, call) { if (!self) { throw new Referen
 function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
 
 {
-  (function () {
 
-    // utility functions for plural rules methods
-    var isIn = function isIn(n, list) {
-      return list.indexOf(n) !== -1;
-    };
+  // utility functions for plural rules methods
+  var isIn = function isIn(n, list) {
+    return list.indexOf(n) !== -1;
+  };
 
-    var isBetween = function isBetween(n, start, end) {
-      return (typeof n === 'undefined' ? 'undefined' : _typeof(n)) === (typeof start === 'undefined' ? 'undefined' : _typeof(start)) && start <= n && n <= end;
-    };
+  var isBetween = function isBetween(n, start, end) {
+    return (typeof n === 'undefined' ? 'undefined' : _typeof(n)) === (typeof start === 'undefined' ? 'undefined' : _typeof(start)) && start <= n && n <= end;
+  };
 
-    // list of all plural rules methods:
-    // map an integer to the plural form name to use
-
-
-    var getPluralRule = function getPluralRule(code) {
-      // return a function that gives the plural form name for a given integer
-      var index = locales2rules[code.replace(/-.*$/, '')];
-      if (!(index in pluralRules)) {
-        return function () {
-          return 'other';
-        };
-      }
-      return pluralRules[index];
-    };
-
-    /**
-     * An `L10nError` with information about language and entity ID in which
-     * the error happened.
-     */
+  // list of all plural rules methods:
+  // map an integer to the plural form name to use
 
 
-    var merge = function merge(argopts, opts) {
-      return Object.assign({}, argopts, valuesOf(opts));
-    };
+  var getPluralRule = function getPluralRule(code) {
+    // return a function that gives the plural form name for a given integer
+    var index = locales2rules[code.replace(/-.*$/, '')];
+    if (!(index in pluralRules)) {
+      return function () {
+        return 'other';
+      };
+    }
+    return pluralRules[index];
+  };
 
-    var valuesOf = function valuesOf(opts) {
-      return Object.keys(opts).reduce(function (seq, cur) {
-        var _Object$assign;
-
-        return Object.assign({}, seq, (_Object$assign = {}, _Object$assign[cur] = opts[cur].valueOf(), _Object$assign));
-      }, {});
-    };
-
-    /**
-     * @module
-     *
-     * The role of the FTL resolver is to format a translation object to an
-     * instance of `FTLType`.
-     *
-     * Translations can contain references to other entities or external arguments,
-     * conditional logic in form of select expressions, traits which describe their
-     * grammatical features, and can use FTL builtins which make use of the `Intl`
-     * formatters to format numbers, dates, lists and more into the context's
-     * language.  See the documentation of the FTL syntax for more information.
-     *
-     * In case of errors the resolver will try to salvage as much of the
-     * translation as possible.  In rare situations where the resolver didn't know
-     * how to recover from an error it will return an instance of `FTLNone`.
-     *
-     * `EntityReference`, `MemberExpression` and `SelectExpression` resolve to raw
-     * Runtime Entries objects and the result of the resolution needs to be passed
-     * into `Value` to get their real value.  This is useful for composing
-     * expressions.  Consider:
-     *
-     *     brand-name[nominative]
-     *
-     * which is a `MemberExpression` with properties `obj: EntityReference` and
-     * `key: Keyword`.  If `EntityReference` was resolved eagerly, it would
-     * instantly resolve to the value of the `brand-name` entity.  Instead, we want
-     * to get the entity object and look for its `nominative` trait.
-     *
-     * All other expressions (except for `FunctionReference` which is only used in
-     * `CallExpression`) resolve to an instance of `FTLType`, which must then be
-     * sringified with its `toString` method by the caller.
-     */
-
-    // Prevent expansion of too long placeables.
+  /**
+   * An `L10nError` with information about language and entity ID in which
+   * the error happened.
+   */
 
 
-    /**
-     * Map an array of JavaScript values into FTL Values.
-     *
-     * Used for external arguments of Array type and for implicit Lists in
-     * placeables.
-     *
-     * @private
-     */
-    var mapValues = function mapValues(env, arr) {
-      var values = new FTLList();
-      for (var _iterator = arr, _isArray = Array.isArray(_iterator), _i = 0, _iterator = _isArray ? _iterator : _iterator[Symbol.iterator]();;) {
-        var _ref7;
+  var merge = function merge(argopts, opts) {
+    return Object.assign({}, argopts, valuesOf(opts));
+  };
 
-        if (_isArray) {
-          if (_i >= _iterator.length) break;
-          _ref7 = _iterator[_i++];
-        } else {
-          _i = _iterator.next();
-          if (_i.done) break;
-          _ref7 = _i.value;
-        }
+  var valuesOf = function valuesOf(opts) {
+    return Object.keys(opts).reduce(function (seq, cur) {
+      return Object.assign({}, seq, _defineProperty({}, cur, opts[cur].valueOf()));
+    }, {});
+  };
 
-        var elem = _ref7;
+  /**
+   * @module
+   *
+   * The role of the FTL resolver is to format a translation object to an
+   * instance of `FTLType`.
+   *
+   * Translations can contain references to other entities or external arguments,
+   * conditional logic in form of select expressions, traits which describe their
+   * grammatical features, and can use FTL builtins which make use of the `Intl`
+   * formatters to format numbers, dates, lists and more into the context's
+   * language.  See the documentation of the FTL syntax for more information.
+   *
+   * In case of errors the resolver will try to salvage as much of the
+   * translation as possible.  In rare situations where the resolver didn't know
+   * how to recover from an error it will return an instance of `FTLNone`.
+   *
+   * `EntityReference`, `MemberExpression` and `SelectExpression` resolve to raw
+   * Runtime Entries objects and the result of the resolution needs to be passed
+   * into `Value` to get their real value.  This is useful for composing
+   * expressions.  Consider:
+   *
+   *     brand-name[nominative]
+   *
+   * which is a `MemberExpression` with properties `obj: EntityReference` and
+   * `key: Keyword`.  If `EntityReference` was resolved eagerly, it would
+   * instantly resolve to the value of the `brand-name` entity.  Instead, we want
+   * to get the entity object and look for its `nominative` trait.
+   *
+   * All other expressions (except for `FunctionReference` which is only used in
+   * `CallExpression`) resolve to an instance of `FTLType`, which must then be
+   * sringified with its `toString` method by the caller.
+   */
+
+  // Prevent expansion of too long placeables.
+
+
+  /**
+   * Map an array of JavaScript values into FTL Values.
+   *
+   * Used for external arguments of Array type and for implicit Lists in
+   * placeables.
+   *
+   * @private
+   */
+  var mapValues = function mapValues(env, arr) {
+    var values = new FTLList();
+    var _iteratorNormalCompletion = true;
+    var _didIteratorError = false;
+    var _iteratorError = undefined;
+
+    try {
+      for (var _iterator = arr[Symbol.iterator](), _step; !(_iteratorNormalCompletion = (_step = _iterator.next()).done); _iteratorNormalCompletion = true) {
+        var elem = _step.value;
 
         values.push(Value(env, elem));
       }
-      return values;
-    };
-
-    /**
-     * Helper for choosing the default value from a set of members.
-     *
-     * Used in SelectExpressions and Value.
-     *
-     * @private
-     */
-
-
-    var DefaultMember = function DefaultMember(env, members, def) {
-      if (members[def]) {
-        return members[def];
+    } catch (err) {
+      _didIteratorError = true;
+      _iteratorError = err;
+    } finally {
+      try {
+        if (!_iteratorNormalCompletion && _iterator.return) {
+          _iterator.return();
+        }
+      } finally {
+        if (_didIteratorError) {
+          throw _iteratorError;
+        }
       }
+    }
 
-      var errors = env.errors;
+    return values;
+  };
 
-      errors.push(new RangeError('No default'));
-      return new FTLNone();
-    };
-
-    /**
-     * Resolve a reference to an entity to the entity object.
-     *
-     * @private
-     */
+  /**
+   * Helper for choosing the default value from a set of members.
+   *
+   * Used in SelectExpressions and Value.
+   *
+   * @private
+   */
 
 
-    var EntityReference = function EntityReference(env, _ref8) {
-      var name = _ref8.name;
-      var ctx = env.ctx,
-          errors = env.errors;
+  var DefaultMember = function DefaultMember(env, members, def) {
+    if (members[def]) {
+      return members[def];
+    }
 
-      var entity = ctx.messages.get(name);
+    var errors = env.errors;
 
-      if (!entity) {
-        errors.push(new ReferenceError('Unknown entity: ' + name));
-        return new FTLNone(name);
-      }
+    errors.push(new RangeError('No default'));
+    return new FTLNone();
+  };
 
+  /**
+   * Resolve a reference to an entity to the entity object.
+   *
+   * @private
+   */
+
+
+  var EntityReference = function EntityReference(env, _ref11) {
+    var name = _ref11.name;
+    var ctx = env.ctx,
+        errors = env.errors;
+
+    var entity = ctx.messages.get(name);
+
+    if (!entity) {
+      errors.push(new ReferenceError('Unknown entity: ' + name));
+      return new FTLNone(name);
+    }
+
+    return entity;
+  };
+
+  /**
+   * Resolve a member expression to the member object.
+   *
+   * @private
+   */
+
+
+  var MemberExpression = function MemberExpression(env, _ref12) {
+    var obj = _ref12.obj,
+        key = _ref12.key;
+
+    var entity = EntityReference(env, obj);
+    if (entity instanceof FTLNone) {
       return entity;
-    };
+    }
 
-    /**
-     * Resolve a member expression to the member object.
-     *
-     * @private
-     */
+    var ctx = env.ctx,
+        errors = env.errors;
 
+    var keyword = Value(env, key);
 
-    var MemberExpression = function MemberExpression(env, _ref9) {
-      var obj = _ref9.obj,
-          key = _ref9.key;
+    if (entity.traits) {
+      // Match the specified key against keys of each trait, in order.
+      var _iteratorNormalCompletion2 = true;
+      var _didIteratorError2 = false;
+      var _iteratorError2 = undefined;
 
-      var entity = EntityReference(env, obj);
-      if (entity instanceof FTLNone) {
-        return entity;
-      }
-
-      var ctx = env.ctx,
-          errors = env.errors;
-
-      var keyword = Value(env, key);
-
-      if (entity.traits) {
-        // Match the specified key against keys of each trait, in order.
-        for (var _iterator2 = entity.traits, _isArray2 = Array.isArray(_iterator2), _i2 = 0, _iterator2 = _isArray2 ? _iterator2 : _iterator2[Symbol.iterator]();;) {
-          var _ref10;
-
-          if (_isArray2) {
-            if (_i2 >= _iterator2.length) break;
-            _ref10 = _iterator2[_i2++];
-          } else {
-            _i2 = _iterator2.next();
-            if (_i2.done) break;
-            _ref10 = _i2.value;
-          }
-
-          var member = _ref10;
+      try {
+        for (var _iterator2 = entity.traits[Symbol.iterator](), _step2; !(_iteratorNormalCompletion2 = (_step2 = _iterator2.next()).done); _iteratorNormalCompletion2 = true) {
+          var member = _step2.value;
 
           var memberKey = Value(env, member.key);
           if (keyword.match(ctx, memberKey)) {
             return member;
           }
         }
-      }
-
-      errors.push(new ReferenceError('Unknown trait: ' + keyword.toString(ctx)));
-      return Value(env, entity);
-    };
-
-    /**
-     * Resolve a select expression to the member object.
-     *
-     * @private
-     */
-
-
-    var SelectExpression = function SelectExpression(env, _ref11) {
-      var exp = _ref11.exp,
-          vars = _ref11.vars,
-          def = _ref11.def;
-
-      var selector = Value(env, exp);
-      if (selector instanceof FTLNone) {
-        return DefaultMember(env, vars, def);
-      }
-
-      // Match the selector against keys of each variant, in order.
-      for (var _iterator3 = vars, _isArray3 = Array.isArray(_iterator3), _i3 = 0, _iterator3 = _isArray3 ? _iterator3 : _iterator3[Symbol.iterator]();;) {
-        var _ref12;
-
-        if (_isArray3) {
-          if (_i3 >= _iterator3.length) break;
-          _ref12 = _iterator3[_i3++];
-        } else {
-          _i3 = _iterator3.next();
-          if (_i3.done) break;
-          _ref12 = _i3.value;
+      } catch (err) {
+        _didIteratorError2 = true;
+        _iteratorError2 = err;
+      } finally {
+        try {
+          if (!_iteratorNormalCompletion2 && _iterator2.return) {
+            _iterator2.return();
+          }
+        } finally {
+          if (_didIteratorError2) {
+            throw _iteratorError2;
+          }
         }
+      }
+    }
 
-        var variant = _ref12;
+    errors.push(new ReferenceError('Unknown trait: ' + keyword.toString(ctx)));
+    return Value(env, entity);
+  };
+
+  /**
+   * Resolve a select expression to the member object.
+   *
+   * @private
+   */
+
+
+  var SelectExpression = function SelectExpression(env, _ref13) {
+    var exp = _ref13.exp,
+        vars = _ref13.vars,
+        def = _ref13.def;
+
+    var selector = Value(env, exp);
+    if (selector instanceof FTLNone) {
+      return DefaultMember(env, vars, def);
+    }
+
+    // Match the selector against keys of each variant, in order.
+    var _iteratorNormalCompletion3 = true;
+    var _didIteratorError3 = false;
+    var _iteratorError3 = undefined;
+
+    try {
+      for (var _iterator3 = vars[Symbol.iterator](), _step3; !(_iteratorNormalCompletion3 = (_step3 = _iterator3.next()).done); _iteratorNormalCompletion3 = true) {
+        var variant = _step3.value;
 
         var key = Value(env, variant.key);
 
@@ -247,237 +265,254 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
           return variant;
         }
 
-        var _ctx = env.ctx;
+        var ctx = env.ctx;
 
 
-        if (key instanceof FTLKeyword && key.match(_ctx, selector)) {
+        if (key instanceof FTLKeyword && key.match(ctx, selector)) {
           return variant;
         }
       }
-
-      return DefaultMember(env, vars, def);
-    };
-
-    /**
-     * Resolve expression to an FTL type.
-     *
-     * JavaScript strings are a special case.  Since they natively have the
-     * `toString` method they can be used as if they were an FTL type without
-     * paying the cost of creating a instance of one.
-     *
-     * @param   {Object} expr
-     * @returns {FTLType}
-     * @private
-     */
-
-
-    var Value = function Value(env, expr) {
-      // A fast-path for strings which are the most common case, and for `FTLNone`
-      // which doesn't require any additional logic.
-      if (typeof expr === 'string' || expr instanceof FTLNone) {
-        return expr;
-      }
-
-      // The Runtime AST (Entries) encodes patterns (complex strings with
-      // placeables) as Arrays.
-      if (Array.isArray(expr)) {
-        return Pattern(env, expr);
-      }
-
-      switch (expr.type) {
-        case 'kw':
-          return new FTLKeyword(expr);
-        case 'num':
-          return new FTLNumber(expr.val);
-        case 'ext':
-          return ExternalArgument(env, expr);
-        case 'fun':
-          return FunctionReference(env, expr);
-        case 'call':
-          return CallExpression(env, expr);
-        case 'ref':
-          {
-            var entity = EntityReference(env, expr);
-            return Value(env, entity);
-          }
-        case 'mem':
-          {
-            var member = MemberExpression(env, expr);
-            return Value(env, member);
-          }
-        case 'sel':
-          {
-            var _member = SelectExpression(env, expr);
-            return Value(env, _member);
-          }
-        case undefined:
-          {
-            // If it's a node with a value, resolve the value.
-            if (expr.val !== undefined) {
-              return Value(env, expr.val);
-            }
-
-            var def = DefaultMember(env, expr.traits, expr.def);
-            return Value(env, def);
-          }
-        default:
-          return new FTLNone();
-      }
-    };
-
-    /**
-     * Resolve a reference to an external argument.
-     *
-     * @private
-     */
-
-
-    var ExternalArgument = function ExternalArgument(env, _ref13) {
-      var name = _ref13.name;
-      var args = env.args,
-          errors = env.errors;
-
-
-      if (!args || !args.hasOwnProperty(name)) {
-        errors.push(new ReferenceError('Unknown external: ' + name));
-        return new FTLNone(name);
-      }
-
-      var arg = args[name];
-
-      if (arg instanceof FTLType) {
-        return arg;
-      }
-
-      // Convert the argument to an FTL type.
-      switch (typeof arg === 'undefined' ? 'undefined' : _typeof(arg)) {
-        case 'string':
-          return arg;
-        case 'number':
-          return new FTLNumber(arg);
-        case 'object':
-          if (Array.isArray(arg)) {
-            return mapValues(env, arg);
-          }
-          if (arg instanceof Date) {
-            return new FTLDateTime(arg);
-          }
-        default:
-          errors.push(new TypeError('Unsupported external type: ' + name + ', ' + (typeof arg === 'undefined' ? 'undefined' : _typeof(arg))));
-          return new FTLNone(name);
-      }
-    };
-
-    /**
-     * Resolve a reference to a function.
-     *
-     * @private
-     */
-
-
-    var FunctionReference = function FunctionReference(env, _ref14) {
-      var name = _ref14.name;
-
-      // Some functions are built-in.  Others may be provided by the runtime via
-      // the `MessageContext` constructor.
-      var functions = env.ctx.functions,
-          errors = env.errors;
-
-      var func = functions[name] || builtins[name];
-
-      if (!func) {
-        errors.push(new ReferenceError('Unknown function: ' + name + '()'));
-        return new FTLNone(name + '()');
-      }
-
-      if (typeof func !== 'function') {
-        errors.push(new TypeError('Function ' + name + '() is not callable'));
-        return new FTLNone(name + '()');
-      }
-
-      return func;
-    };
-
-    /**
-     * Resolve a call to a Function with positional and key-value arguments.
-     *
-     * @private
-     */
-
-
-    var CallExpression = function CallExpression(env, _ref15) {
-      var name = _ref15.name,
-          args = _ref15.args;
-
-      var callee = FunctionReference(env, name);
-
-      if (callee instanceof FTLNone) {
-        return callee;
-      }
-
-      var posargs = [];
-      var keyargs = [];
-
-      for (var _iterator4 = args, _isArray4 = Array.isArray(_iterator4), _i4 = 0, _iterator4 = _isArray4 ? _iterator4 : _iterator4[Symbol.iterator]();;) {
-        var _ref16;
-
-        if (_isArray4) {
-          if (_i4 >= _iterator4.length) break;
-          _ref16 = _iterator4[_i4++];
-        } else {
-          _i4 = _iterator4.next();
-          if (_i4.done) break;
-          _ref16 = _i4.value;
+    } catch (err) {
+      _didIteratorError3 = true;
+      _iteratorError3 = err;
+    } finally {
+      try {
+        if (!_iteratorNormalCompletion3 && _iterator3.return) {
+          _iterator3.return();
         }
+      } finally {
+        if (_didIteratorError3) {
+          throw _iteratorError3;
+        }
+      }
+    }
 
-        var _arg = _ref16;
+    return DefaultMember(env, vars, def);
+  };
 
-        if (_arg.type === 'kv') {
-          keyargs[_arg.name] = Value(env, _arg.val);
+  /**
+   * Resolve expression to an FTL type.
+   *
+   * JavaScript strings are a special case.  Since they natively have the
+   * `toString` method they can be used as if they were an FTL type without
+   * paying the cost of creating a instance of one.
+   *
+   * @param   {Object} expr
+   * @returns {FTLType}
+   * @private
+   */
+
+
+  var Value = function Value(env, expr) {
+    // A fast-path for strings which are the most common case, and for `FTLNone`
+    // which doesn't require any additional logic.
+    if (typeof expr === 'string' || expr instanceof FTLNone) {
+      return expr;
+    }
+
+    // The Runtime AST (Entries) encodes patterns (complex strings with
+    // placeables) as Arrays.
+    if (Array.isArray(expr)) {
+      return Pattern(env, expr);
+    }
+
+    switch (expr.type) {
+      case 'kw':
+        return new FTLKeyword(expr);
+      case 'num':
+        return new FTLNumber(expr.val);
+      case 'ext':
+        return ExternalArgument(env, expr);
+      case 'fun':
+        return FunctionReference(env, expr);
+      case 'call':
+        return CallExpression(env, expr);
+      case 'ref':
+        {
+          var entity = EntityReference(env, expr);
+          return Value(env, entity);
+        }
+      case 'mem':
+        {
+          var member = MemberExpression(env, expr);
+          return Value(env, member);
+        }
+      case 'sel':
+        {
+          var _member = SelectExpression(env, expr);
+          return Value(env, _member);
+        }
+      case undefined:
+        {
+          // If it's a node with a value, resolve the value.
+          if (expr.val !== undefined) {
+            return Value(env, expr.val);
+          }
+
+          var def = DefaultMember(env, expr.traits, expr.def);
+          return Value(env, def);
+        }
+      default:
+        return new FTLNone();
+    }
+  };
+
+  /**
+   * Resolve a reference to an external argument.
+   *
+   * @private
+   */
+
+
+  var ExternalArgument = function ExternalArgument(env, _ref14) {
+    var name = _ref14.name;
+    var args = env.args,
+        errors = env.errors;
+
+
+    if (!args || !args.hasOwnProperty(name)) {
+      errors.push(new ReferenceError('Unknown external: ' + name));
+      return new FTLNone(name);
+    }
+
+    var arg = args[name];
+
+    if (arg instanceof FTLType) {
+      return arg;
+    }
+
+    // Convert the argument to an FTL type.
+    switch (typeof arg === 'undefined' ? 'undefined' : _typeof(arg)) {
+      case 'string':
+        return arg;
+      case 'number':
+        return new FTLNumber(arg);
+      case 'object':
+        if (Array.isArray(arg)) {
+          return mapValues(env, arg);
+        }
+        if (arg instanceof Date) {
+          return new FTLDateTime(arg);
+        }
+      default:
+        errors.push(new TypeError('Unsupported external type: ' + name + ', ' + (typeof arg === 'undefined' ? 'undefined' : _typeof(arg))));
+        return new FTLNone(name);
+    }
+  };
+
+  /**
+   * Resolve a reference to a function.
+   *
+   * @private
+   */
+
+
+  var FunctionReference = function FunctionReference(env, _ref15) {
+    var name = _ref15.name;
+
+    // Some functions are built-in.  Others may be provided by the runtime via
+    // the `MessageContext` constructor.
+    var functions = env.ctx.functions,
+        errors = env.errors;
+
+    var func = functions[name] || builtins[name];
+
+    if (!func) {
+      errors.push(new ReferenceError('Unknown function: ' + name + '()'));
+      return new FTLNone(name + '()');
+    }
+
+    if (typeof func !== 'function') {
+      errors.push(new TypeError('Function ' + name + '() is not callable'));
+      return new FTLNone(name + '()');
+    }
+
+    return func;
+  };
+
+  /**
+   * Resolve a call to a Function with positional and key-value arguments.
+   *
+   * @private
+   */
+
+
+  var CallExpression = function CallExpression(env, _ref16) {
+    var name = _ref16.name,
+        args = _ref16.args;
+
+    var callee = FunctionReference(env, name);
+
+    if (callee instanceof FTLNone) {
+      return callee;
+    }
+
+    var posargs = [];
+    var keyargs = [];
+
+    var _iteratorNormalCompletion4 = true;
+    var _didIteratorError4 = false;
+    var _iteratorError4 = undefined;
+
+    try {
+      for (var _iterator4 = args[Symbol.iterator](), _step4; !(_iteratorNormalCompletion4 = (_step4 = _iterator4.next()).done); _iteratorNormalCompletion4 = true) {
+        var arg = _step4.value;
+
+        if (arg.type === 'kv') {
+          keyargs[arg.name] = Value(env, arg.val);
         } else {
-          posargs.push(Value(env, _arg));
+          posargs.push(Value(env, arg));
         }
       }
 
       // XXX functions should also report errors
-      return callee(posargs, keyargs);
-    };
-
-    /**
-     * Resolve a pattern (a complex string with placeables).
-     *
-     * @private
-     */
-
-
-    var Pattern = function Pattern(env, ptn) {
-      var ctx = env.ctx,
-          dirty = env.dirty,
-          errors = env.errors;
-
-
-      if (dirty.has(ptn)) {
-        errors.push(new RangeError('Cyclic reference'));
-        return new FTLNone();
-      }
-
-      // Tag the pattern as dirty for the purpose of the current resolution.
-      dirty.add(ptn);
-      var result = '';
-
-      for (var _iterator5 = ptn, _isArray5 = Array.isArray(_iterator5), _i5 = 0, _iterator5 = _isArray5 ? _iterator5 : _iterator5[Symbol.iterator]();;) {
-        var _ref17;
-
-        if (_isArray5) {
-          if (_i5 >= _iterator5.length) break;
-          _ref17 = _iterator5[_i5++];
-        } else {
-          _i5 = _iterator5.next();
-          if (_i5.done) break;
-          _ref17 = _i5.value;
+    } catch (err) {
+      _didIteratorError4 = true;
+      _iteratorError4 = err;
+    } finally {
+      try {
+        if (!_iteratorNormalCompletion4 && _iterator4.return) {
+          _iterator4.return();
         }
+      } finally {
+        if (_didIteratorError4) {
+          throw _iteratorError4;
+        }
+      }
+    }
 
-        var part = _ref17;
+    return callee(posargs, keyargs);
+  };
+
+  /**
+   * Resolve a pattern (a complex string with placeables).
+   *
+   * @private
+   */
+
+
+  var Pattern = function Pattern(env, ptn) {
+    var ctx = env.ctx,
+        dirty = env.dirty,
+        errors = env.errors;
+
+
+    if (dirty.has(ptn)) {
+      errors.push(new RangeError('Cyclic reference'));
+      return new FTLNone();
+    }
+
+    // Tag the pattern as dirty for the purpose of the current resolution.
+    dirty.add(ptn);
+    var result = '';
+
+    var _iteratorNormalCompletion5 = true;
+    var _didIteratorError5 = false;
+    var _iteratorError5 = undefined;
+
+    try {
+      for (var _iterator5 = ptn[Symbol.iterator](), _step5; !(_iteratorNormalCompletion5 = (_step5 = _iterator5.next()).done); _iteratorNormalCompletion5 = true) {
+        var part = _step5.value;
 
         if (typeof part === 'string') {
           result += part;
@@ -487,1348 +522,1384 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
           var value = part.length === 1 ? Value(env, part[0]) : mapValues(env, part);
 
           var str = value.toString(ctx);
+
           if (str.length > MAX_PLACEABLE_LENGTH) {
             errors.push(new RangeError('Too many characters in placeable ' + ('(' + str.length + ', max allowed is ' + MAX_PLACEABLE_LENGTH + ')')));
-            result += str.substr(0, MAX_PLACEABLE_LENGTH);
+            str = str.substr(0, MAX_PLACEABLE_LENGTH);
+          }
+
+          if (ctx.useIsolating) {
+            result += '' + FSI + str + PDI;
           } else {
             result += str;
           }
         }
       }
+    } catch (err) {
+      _didIteratorError5 = true;
+      _iteratorError5 = err;
+    } finally {
+      try {
+        if (!_iteratorNormalCompletion5 && _iterator5.return) {
+          _iterator5.return();
+        }
+      } finally {
+        if (_didIteratorError5) {
+          throw _iteratorError5;
+        }
+      }
+    }
 
-      dirty.delete(ptn);
+    dirty.delete(ptn);
+    return result;
+  };
+
+  /**
+   * Format a translation into an `FTLType`.
+   *
+   * The return value must be sringified with its `toString` method by the
+   * caller.
+   *
+   * @param   {MessageContext} ctx
+   * @param   {Object}         args
+   * @param   {Object}         entity
+   * @param   {Array}          errors
+   * @returns {FTLType}
+   */
+
+
+  var resolve = function resolve(ctx, args, entity) {
+    var errors = arguments.length > 3 && arguments[3] !== undefined ? arguments[3] : [];
+
+    var env = {
+      ctx: ctx, args: args, errors: errors, dirty: new WeakSet()
+    };
+    return Value(env, entity);
+  };
+
+  /**
+   * Message contexts are single-language stores of translations.  They are
+   * responsible for parsing translation resources in the FTL syntax and can
+   * format translation units (entities) to strings.
+   *
+   * Always use `MessageContext.format` to retrieve translation units from
+   * a context.  Translations can contain references to other entities or
+   * external arguments, conditional logic in form of select expressions, traits
+   * which describe their grammatical features, and can use FTL builtins which
+   * make use of the `Intl` formatters to format numbers, dates, lists and more
+   * into the context's language.  See the documentation of the FTL syntax for
+   * more information.
+   */
+
+
+  /**
+   * Verifies that the given string is a well-formed BCP 47 language tag
+   * with no duplicate variant or singleton subtags.
+   *
+   * Spec: ECMAScript Internationalization API Specification, 6.2.2.
+   */
+  var IsStructurallyValidLanguageTag = function IsStructurallyValidLanguageTag(locale) {
+    if (!languageTagRE.test(locale)) return false;
+
+    // Before checking for duplicate variant or singleton subtags with
+    // regular expressions, we have to get private use subtag sequences
+    // out of the picture.
+    if (locale.startsWith("x-")) return true;
+    var pos = locale.indexOf("-x-");
+    if (pos !== -1) locale = locale.substring(0, pos);
+
+    // Check for duplicate variant or singleton subtags.
+    return !duplicateVariantRE.test(locale) && !duplicateSingletonRE.test(locale);
+  };
+
+  /**
+   * Canonicalizes the given structurally valid BCP 47 language tag, including
+   * regularized case of subtags. For example, the language tag
+   * Zh-NAN-haNS-bu-variant2-Variant1-u-ca-chinese-t-Zh-laTN-x-PRIVATE, where
+   *
+   *     Zh             ; 2*3ALPHA
+   *     -NAN           ; ["-" extlang]
+   *     -haNS          ; ["-" script]
+   *     -bu            ; ["-" region]
+   *     -variant2      ; *("-" variant)
+   *     -Variant1
+   *     -u-ca-chinese  ; *("-" extension)
+   *     -t-Zh-laTN
+   *     -x-PRIVATE     ; ["-" privateuse]
+   *
+   * becomes nan-Hans-mm-variant2-variant1-t-zh-latn-u-ca-chinese-x-private
+   *
+   * Spec: ECMAScript Internationalization API Specification, 6.2.3.
+   * Spec: RFC 5646, section 4.5.
+   */
+
+
+  var CanonicalizeLanguageTag = function CanonicalizeLanguageTag(locale) {
+    // The input
+    // "Zh-NAN-haNS-bu-variant2-Variant1-u-ca-chinese-t-Zh-laTN-x-PRIVATE"
+    // will be used throughout this method to illustrate how it works.
+
+    // Language tags are compared and processed case-insensitively, so
+    // technically it's not necessary to adjust case. But for easier processing,
+    // and because the canonical form for most subtags is lower case, we start
+    // with lower case for all.
+    // "Zh-NAN-haNS-bu-variant2-Variant1-u-ca-chinese-t-Zh-laTN-x-PRIVATE" ->
+    // "zh-nan-hans-bu-variant2-variant1-u-ca-chinese-t-zh-latn-x-private"
+    locale = locale.toLowerCase();
+
+    // Handle mappings for complete tags.
+    if (langTagMappings && langTagMappings.hasOwnProperty(locale)) return langTagMappings[locale];
+
+    var subtags = locale.split("-");
+    var i = 0;
+
+    // Handle the standard part: All subtags before the first singleton or "x".
+    // "zh-nan-hans-bu-variant2-variant1"
+    while (i < subtags.length) {
+      var subtag = subtags[i];
+
+      // If we reach the start of an extension sequence or private use part,
+      // we're done with this loop. We have to check for i > 0 because for
+      // irregular language tags, such as i-klingon, the single-character
+      // subtag "i" is not the start of an extension sequence.
+      // In the example, we break at "u".
+      if (subtag.length === 1 && (i > 0 || subtag === "x")) break;
+
+      if (subtag.length === 4) {
+        // 4-character subtags are script codes; their first character
+        // needs to be capitalized. "hans" -> "Hans"
+        subtag = subtag[0].toUpperCase() + subtag.substring(1);
+      } else if (i !== 0 && subtag.length === 2) {
+        // 2-character subtags that are not in initial position are region
+        // codes; they need to be upper case. "bu" -> "BU"
+        subtag = subtag.toUpperCase();
+      }
+      if (langSubtagMappings.hasOwnProperty(subtag)) {
+        // Replace deprecated subtags with their preferred values.
+        // "BU" -> "MM"
+        // This has to come after we capitalize region codes because
+        // otherwise some language and region codes could be confused.
+        // For example, "in" is an obsolete language code for Indonesian,
+        // but "IN" is the country code for India.
+        // Note that the script generating langSubtagMappings makes sure
+        // that no regular subtag mapping will replace an extlang code.
+        subtag = langSubtagMappings[subtag];
+      } else if (extlangMappings.hasOwnProperty(subtag)) {
+        // Replace deprecated extlang subtags with their preferred values,
+        // and remove the preceding subtag if it's a redundant prefix.
+        // "zh-nan" -> "nan"
+        // Note that the script generating extlangMappings makes sure that
+        // no extlang mapping will replace a normal language code.
+        subtag = extlangMappings[subtag].preferred;
+        if (i === 1 && extlangMappings[subtag].prefix === subtags[0]) {
+          subtags.shift();
+          i--;
+        }
+      }
+      subtags[i] = subtag;
+      i++;
+    }
+    var normal = subtags.slice(0, i).join("-");
+
+    // Extension sequences are sorted by their singleton characters.
+    // "u-ca-chinese-t-zh-latn" -> "t-zh-latn-u-ca-chinese"
+    var extensions = [];
+    while (i < subtags.length && subtags[i] !== "x") {
+      var extensionStart = i;
+      i++;
+      while (i < subtags.length && subtags[i].length > 1) {
+        i++;
+      }var extension = sybtags.slice(extensionStart, i).join("-");
+      extensions.push(extension);
+    }
+    extensions.sort();
+
+    // Private use sequences are left as is. "x-private"
+    var privateUse = "";
+    if (i < subtags.length) privateUse = subtags.slice(i).join("-");
+
+    // Put everything back together.
+    var canonical = normal;
+    if (extensions.length > 0) canonical += "-" + extensions.join("-");
+    if (privateUse.length > 0) {
+      // Be careful of a Language-Tag that is entirely privateuse.
+      if (canonical.length > 0) canonical += "-" + privateUse;else canonical = privateUse;
+    }
+
+    return canonical;
+  };
+
+  /**
+   * Canonicalizes a locale list.
+   *
+   * Spec: ECMAScript Internationalization API Specification, 9.2.1.
+   */
+
+
+  var CanonicalizeLocaleList = function CanonicalizeLocaleList(locales) {
+    if (locales === undefined) return [];
+    var seen = [];
+    if (typeof locales === "string") locales = [locales];
+    var O = locales;
+    var len = O.length;
+    var k = 0;
+    while (k < len) {
+      // Don't call ToString(k) - SpiderMonkey is faster with integers.
+      var kPresent = k in O;
+      if (kPresent) {
+        var kValue = O[k];
+        if (!(typeof kValue === "string" || (typeof kValue === 'undefined' ? 'undefined' : _typeof(kValue)) === "object")) ThrowError(JSMSG_INVALID_LOCALES_ELEMENT);
+        var tag = kValue;
+        if (!IsStructurallyValidLanguageTag(tag)) ThrowError(JSMSG_INVALID_LANGUAGE_TAG, tag);
+        tag = CanonicalizeLanguageTag(tag);
+        if (seen.indexOf(tag) === -1) seen.push(tag);
+      }
+      k++;
+    }
+    return seen;
+  };
+
+  /**
+   * Compares a BCP 47 language tag against the locales in availableLocales
+   * and returns the best available match. Uses the fallback
+   * mechanism of RFC 4647, section 3.4.
+   *
+   * Spec: ECMAScript Internationalization API Specification, 9.2.2.
+   * Spec: RFC 4647, section 3.4.
+   */
+
+
+  var BestAvailableLocale = function BestAvailableLocale(availableLocales, locale) {
+    var candidate = locale;
+    while (true) {
+      if (availableLocales.indexOf(candidate) !== -1) return candidate;
+      var pos = candidate.lastIndexOf('-');
+      if (pos === -1) return undefined;
+      if (pos >= 2 && candidate[pos - 2] === "-") pos -= 2;
+      candidate = candidate.substring(0, pos);
+    }
+  };
+
+  /**
+   * Returns the subset of availableLocales for which requestedLocales has a
+   * matching (possibly fallback) locale. Locales appear in the same order in the
+   * returned list as in the input list.
+   *
+   * This function is a slight modification of the LookupSupprtedLocales algorithm
+   * The difference is in step 4d where instead of adding requested locale,
+   * we're adding availableLocale to the subset.
+   *
+   * This allows us to directly use returned subset to pool resources.
+   *
+   * Spec: ECMAScript Internationalization API Specification, 9.2.6.
+   */
+
+
+  var LookupAvailableLocales = function LookupAvailableLocales(availableLocales, requestedLocales) {
+    // Steps 1-2.
+    var len = requestedLocales.length;
+    var subset = [];
+
+    // Steps 3-4.
+    var k = 0;
+    while (k < len) {
+      // Steps 4.a-b.
+      var locale = requestedLocales[k];
+      var noExtensionsLocale = locale.replace(unicodeLocaleExtensionSequenceGlobalRE, "");
+
+      // Step 4.c-d.
+      var availableLocale = BestAvailableLocale(availableLocales, noExtensionsLocale);
+      if (availableLocale !== undefined)
+        // in LookupSupportedLocales it pushes locale here
+        subset.push(availableLocale);
+
+      // Step 4.e.
+      k++;
+    }
+
+    // Steps 5-6.
+    return subset.slice(0);
+  };
+
+  var prioritizeLocales = function prioritizeLocales(availableLocales, requestedLocales, defaultLocale) {
+    availableLocales = CanonicalizeLocaleList(availableLocales);
+    requestedLocales = CanonicalizeLocaleList(requestedLocales);
+
+    var result = LookupAvailableLocales(availableLocales, requestedLocales);
+
+    if (!defaultLocale) {
       return result;
+    }
+
+    // if default locale is not present in result,
+    // add it to the end of fallback chain
+    defaultLocale = CanonicalizeLanguageTag(defaultLocale);
+    if (result.indexOf(defaultLocale) === -1) {
+      result.push(defaultLocale);
+    }
+
+    return result;
+  };
+
+  var getDirection = function getDirection(code) {
+    var tag = code.split('-')[0];
+    return ['ar', 'he', 'fa', 'ps', 'ur'].indexOf(tag) >= 0 ? 'rtl' : 'ltr';
+  };
+
+  /**
+   * Create a `MessageContext` for the first bundle in the fallback chain.
+   *
+   * Fetches the bundle's resources and creates a context from them.
+   *
+   * @param   {Array<ResourceBundle>} bundle
+   * @param   {Function}              createContext
+   * @returns {Promise<MessageContext>}
+   * @private
+   */
+  var createHeadContextWith = function createHeadContextWith(createContext, bundles) {
+    var _bundles = _slicedToArray(bundles, 1),
+        bundle = _bundles[0];
+
+    if (!bundle) {
+      return Promise.resolve(null);
+    }
+
+    return bundle.fetch().then(function (resources) {
+      var ctx = createContext(bundle.lang);
+      resources
+      // Filter out resources which failed to load correctly (e.g. 404).
+      .filter(function (res) {
+        return res !== null;
+      }).forEach(function (res) {
+        return ctx.addMessages(res);
+      });
+      // Save the reference to the context.
+      contexts.set(bundle, ctx);
+      return ctx;
+    });
+  };
+
+  /**
+   *
+   * Test if two fallback chains are functionally the same.
+   *
+   * @param   {Array<ResourceBundle>} bundles1
+   * @param   {Array<ResourceBundle>} bundles2
+   * @returns {boolean}
+   * @private
+   */
+
+
+  var equal = function equal(bundles1, bundles2) {
+    return bundles1.length === bundles2.length && bundles1.every(function (_ref22, i) {
+      var lang = _ref22.lang;
+      return lang === bundles2[i].lang;
+    });
+  };
+
+  /**
+   * @private
+   *
+   * This function is an inner function for `Localization.formatWithFallback`.
+   *
+   * It takes a `MessageContext`, list of l10n-ids and a method to be used for
+   * key resolution (either `valueFromContext` or `entityFromContext`) and
+   * optionally a value returned from `keysFromContext` executed against
+   * another `MessageContext`.
+   *
+   * The idea here is that if the previous `MessageContext` did not resolve
+   * all keys, we're calling this function with the next context to resolve
+   * the remaining ones.
+   *
+   * In the function, we loop oer `keys` and check if we have the `prev`
+   * passed and if it has an error entry for the position we're in.
+   *
+   * If it doesn't, it means that we have a good translation for this key and
+   * we return it. If it does, we'll try to resolve the key using the passed
+   * `MessageContext`.
+   *
+   * In the end, we return an Object with resolved translations, errors and
+   * a boolean indicating if there were any errors found.
+   *
+   * The translations are either strings, if the method is `valueFromContext`
+   * or objects with value and attributes if the method is `entityFromContext`.
+   *
+   * See `Localization.formatWithFallback` for more info on how this is used.
+   *
+   * @param {MessageContext} ctx
+   * @param {Array<string>}  keys
+   * @param {Function}       method
+   * @param {{
+   *   errors: Array<Error>,
+   *   withoutFatal: Array<boolean>,
+   *   hasFatalErrors: boolean,
+   *   translations: Array<string>|Array<{value: string, attrs: Object}>}} prev
+   *
+   * @returns {{
+   *   errors: Array<Error>,
+   *   withoutFatal: Array<boolean>,
+   *   hasFatalErrors: boolean,
+   *   translations: Array<string>|Array<{value: string, attrs: Object}>}}
+   */
+
+
+  var keysFromContext = function keysFromContext(method, sanitizeArgs, ctx, keys, prev) {
+    var entityErrors = [];
+    var result = {
+      errors: new Array(keys.length),
+      withoutFatal: new Array(keys.length),
+      hasFatalErrors: false
     };
 
-    /**
-     * Format a translation into an `FTLType`.
-     *
-     * The return value must be sringified with its `toString` method by the
-     * caller.
-     *
-     * @param   {MessageContext} ctx
-     * @param   {Object}         args
-     * @param   {Object}         entity
-     * @param   {Array}          errors
-     * @returns {FTLType}
-     */
-
-
-    var resolve = function resolve(ctx, args, entity) {
-      var errors = arguments.length > 3 && arguments[3] !== undefined ? arguments[3] : [];
-
-      var env = {
-        ctx: ctx, args: args, errors: errors, dirty: new WeakSet()
-      };
-      return Value(env, entity);
-    };
-
-    /**
-     * Message contexts are single-language stores of translations.  They are
-     * responsible for parsing translation resources in the FTL syntax and can
-     * format translation units (entities) to strings.
-     *
-     * Always use `MessageContext.format` to retrieve translation units from
-     * a context.  Translations can contain references to other entities or
-     * external arguments, conditional logic in form of select expressions, traits
-     * which describe their grammatical features, and can use FTL builtins which
-     * make use of the `Intl` formatters to format numbers, dates, lists and more
-     * into the context's language.  See the documentation of the FTL syntax for
-     * more information.
-     */
-
-
-    var prioritizeLocales = function prioritizeLocales(def, availableLangs, requested) {
-      var supportedLocales = new Set();
-      for (var _iterator6 = requested, _isArray6 = Array.isArray(_iterator6), _i6 = 0, _iterator6 = _isArray6 ? _iterator6 : _iterator6[Symbol.iterator]();;) {
-        var _ref18;
-
-        if (_isArray6) {
-          if (_i6 >= _iterator6.length) break;
-          _ref18 = _iterator6[_i6++];
-        } else {
-          _i6 = _iterator6.next();
-          if (_i6.done) break;
-          _ref18 = _i6.value;
-        }
-
-        var lang = _ref18;
-
-        if (availableLangs.has(lang)) {
-          supportedLocales.add(lang);
-        }
+    result.translations = keys.map(function (key, i) {
+      // Use a previously formatted good value if it had no errors.
+      if (prev && !prev.errors[i]) {
+        return prev.translations[i];
       }
 
-      supportedLocales.add(def);
-      return supportedLocales;
-    };
+      // Clear last entity's errors.
+      entityErrors.length = 0;
+      var args = sanitizeArgs(key[1]);
+      var translation = method(ctx, entityErrors, key[0], args);
 
-    var getDirection = function getDirection(code) {
-      var tag = code.split('-')[0];
-      return ['ar', 'he', 'fa', 'ps', 'ur'].indexOf(tag) >= 0 ? 'rtl' : 'ltr';
-    };
-
-    var CanonicalizeLocaleList = function CanonicalizeLocaleList(locales) {
-      if (locales === undefined) {
-        return [];
-      }
-      var seen = [];
-      if (typeof locales === 'string') {
-        locales = [locales];
-      }
-      var O = locales;
-      var len = O.length;
-      var k = 0;
-      while (k < len) {
-        var tag = O[k];
-        tag = tag.toLowerCase();
-        if (seen.indexOf(tag) === -1) {
-          seen.push(tag);
-        }
-        k++;
-      }
-      return seen;
-    };
-
-    var PrioritizeLocales = function PrioritizeLocales(availableLocales, requestedLocales, defaultLocale) {
-
-      var array = new Array();
-      if ((typeof availableLocales === 'undefined' ? 'undefined' : _typeof(availableLocales)) === 'object') {
-        var iter = availableLocales.values();
-        for (var z = 0; z < availableLocales.size; z++) {
-          array.push(iter.next().value);
-        }
-      } else {
-        array = availableLocales.slice();
-      }
-
-      availableLocales = CanonicalizeLocaleList(array);
-      requestedLocales = CanonicalizeLocaleList(requestedLocales);
-
-      var result = LookupAvailableLocales(availableLocales, requestedLocales);
-      if (defaultLocale) {
-        // if default locale is not present in result,
-        // add it to the end of fallback chain
-        defaultLocale = defaultLocale.toLowerCase();
-        if (result.indexOf(defaultLocale) === -1) {
-          result.push(defaultLocale);
-        }
-      }
-
-      for (var i = 0; i < result.length; i++) {
-        array = result[i].split('-');
-        if (array.length === 2) {
-          result[i] = array[0] + '-' + array[1].toUpperCase();
-        }
-      }
-
-      return result;
-    };
-
-    var LookupAvailableLocales = function LookupAvailableLocales(availableLocales, requestedLocales) {
-      // Steps 1-2.
-      var len = requestedLocales.length;
-      var subset = [];
-
-      // Steps 3-4.
-      var k = 0;
-      while (k < len) {
-        // Steps 4.a-b.
-        var locale = requestedLocales[k];
-
-        // Step 4.c-d.
-        var availableLocale = BestAvailableLocale(availableLocales, locale);
-        if (availableLocale !== undefined) {
-          // in LookupSupportedLocales it pushes locale here
-          subset.push(availableLocale);
-        }
-        // Step 4.e.
-        k++;
-      }
-
-      // Steps 5-6.
-      return subset.slice(0);
-    };
-
-    var BestAvailableLocale = function BestAvailableLocale(availableLocales, locale) {
-      var candidate = locale;
-      while (true) {
-        if (availableLocales.indexOf(candidate) !== -1) {
-          return candidate;
-        }
-        var pos = candidate.lastIndexOf('-');
-        if (pos === -1) {
-          return undefined;
-        }
-        if (pos >= 2 && candidate[pos - 2] === '-') {
-          pos -= 2;
-        }
-        candidate = candidate.substring(0, pos);
-      }
-    };
-
-    /**
-     * @private
-     *
-     * This function is an inner function for `Localization.formatWithFallback`.
-     *
-     * It takes a `MessageContext`, list of l10n-ids and a method to be used for
-     * key resolution (either `valueFromContext` or `entityFromContext`) and
-     * optionally a value returned from `keysFromContext` executed against
-     * another `MessageContext`.
-     *
-     * The idea here is that if the previous `MessageContext` did not resolve
-     * all keys, we're calling this function with the next context to resolve
-     * the remaining ones.
-     *
-     * In the function, we loop oer `keys` and check if we have the `prev`
-     * passed and if it has an error entry for the position we're in.
-     *
-     * If it doesn't, it means that we have a good translation for this key and
-     * we return it. If it does, we'll try to resolve the key using the passed
-     * `MessageContext`.
-     *
-     * In the end, we return an Object with resolved translations, errors and
-     * a boolean indicating if there were any errors found.
-     *
-     * The translations are either strings, if the method is `valueFromContext`
-     * or objects with value and attributes if the method is `entityFromContext`.
-     *
-     * See `Localization.formatWithFallback` for more info on how this is used.
-     *
-     * @param {MessageContext} ctx
-     * @param {Array<string>}  keys
-     * @param {Function}       method
-     * @param {{
-     *   errors: Array<Error>,
-     *   hasErrors: boolean,
-     *   translations: Array<string>|Array<{value: string, attrs: Object}>}} prev
-     *
-     * @returns {{
-     *   errors: Array<Error>,
-     *   hasErrors: boolean,
-     *   translations: Array<string>|Array<{value: string, attrs: Object}>}}
-     */
-
-
-    var keysFromContext = function keysFromContext(method, sanitizeArgs, ctx, keys, prev) {
-      var entityErrors = [];
-      var result = {
-        errors: new Array(keys.length),
-        withoutFatal: new Array(keys.length),
-        hasFatalErrors: false
-      };
-
-      result.translations = keys.map(function (key, i) {
-        // Use a previously formatted good value if it had no errors.
-        if (prev && !prev.errors[i]) {
-          return prev.translations[i];
-        }
-
-        // Clear last entity's errors.
-        entityErrors.length = 0;
-        var args = sanitizeArgs(key[1]);
-        var translation = method(ctx, entityErrors, key[0], args);
-
-        // No errors still? Use this translation as fallback to the previous one
-        // which had errors.
-        if (entityErrors.length === 0) {
-          return translation;
-        }
-
-        // The rest of this function handles the scenario in which the translation
-        // was formatted with errors.  Copy the errors to the result object so that
-        // the Localization can handle them (e.g. console.warn about them).
-        result.errors[i] = entityErrors.slice();
-
-        // Formatting errors are not fatal and the translations are usually still
-        // usable and can be good fallback values.  Fatal errors should signal to
-        // the Localization that another fallback should be loaded.
-        if (!entityErrors.some(isL10nError)) {
-          result.withoutFatal[i] = true;
-        } else if (!result.hasFatalErrors) {
-          result.hasFatalErrors = true;
-        }
-
-        // Use the previous translation for this `key` even if it had formatting
-        // errors.  This is usually closer the user's preferred language anyways.
-        if (prev && prev.withoutFatal[i]) {
-          // Mark this previous translation as a good potential fallback value in
-          // case of further fallbacks.
-          result.withoutFatal[i] = true;
-          return prev.translations[i];
-        }
-
-        // If no good or almost good previous translation is available, return the
-        // current translation.  In case of minor errors it's a partially
-        // formatted translation.  In the worst-case scenario it an identifier of
-        // the requested entity.
+      // No errors still? Use this translation as fallback to the previous one
+      // which had errors.
+      if (entityErrors.length === 0) {
         return translation;
-      });
-
-      return result;
-    };
-
-    /**
-     * @private
-     *
-     * This function is passed as a method to `keysFromContext` and resolve
-     * a value of a single L10n Entity using provided `MessageContext`.
-     *
-     * If the function fails to retrieve the entity, it will return an ID of it.
-     * If formatting fails, it will return a partially resolved entity.
-     *
-     * In both cases, an error is being added to the errors array.
-     *
-     * @param   {MessageContext} ctx
-     * @param   {Array<Error>}   errors
-     * @param   {string}         id
-     * @param   {Object}         args
-     * @returns {string}
-     */
-
-
-    var valueFromContext = function valueFromContext(ctx, errors, id, args) {
-      var entity = ctx.messages.get(id);
-
-      if (entity === undefined) {
-        errors.push(new L10nError('Unknown entity: ' + id));
-        return id;
       }
 
-      return ctx.format(entity, args, errors);
-    };
+      // The rest of this function handles the scenario in which the translation
+      // was formatted with errors.  Copy the errors to the result object so that
+      // the Localization can handle them (e.g. console.warn about them).
+      result.errors[i] = entityErrors.slice();
 
-    /**
-     * @private
-     *
-     * This function is passed as a method to `keysFromContext` and resolve
-     * a single L10n Entity using provided `MessageContext`.
-     *
-     * The function will return an object with a value and attributes of the
-     * entity.
-     *
-     * If the function fails to retrieve the entity, the value is set to the ID of
-     * an entity, and attrs to `null`. If formatting fails, it will return
-     * a partially resolved value and attributes.
-     *
-     * In both cases, an error is being added to the errors array.
-     *
-     * @param   {MessageContext} ctx
-     * @param   {Array<Error>}   errors
-     * @param   {String}         id
-     * @param   {Object}         args
-     * @returns {Object}
-     */
-
-
-    var entityFromContext = function entityFromContext(ctx, errors, id, args) {
-      var entity = ctx.messages.get(id);
-
-      if (entity === undefined) {
-        errors.push(new L10nError('Unknown entity: ' + id));
-        return { value: id, attrs: null };
+      // Formatting errors are not fatal and the translations are usually still
+      // usable and can be good fallback values.  Fatal errors should signal to
+      // the Localization that another fallback should be loaded.
+      if (!entityErrors.some(isL10nError)) {
+        result.withoutFatal[i] = true;
+      } else if (!result.hasFatalErrors) {
+        result.hasFatalErrors = true;
       }
 
-      var formatted = {
-        value: ctx.format(entity, args, errors),
-        attrs: null
-      };
+      // Use the previous translation for this `key` even if it had formatting
+      // errors.  This is usually closer the user's preferred language anyways.
+      if (prev && prev.withoutFatal[i]) {
+        // Mark this previous translation as a good potential fallback value in
+        // case of further fallbacks.
+        result.withoutFatal[i] = true;
+        return prev.translations[i];
+      }
 
-      if (entity.traits) {
-        formatted.attrs = [];
-        for (var i = 0, trait; trait = entity.traits[i]; i++) {
-          if (!trait.key.hasOwnProperty('ns')) {
-            continue;
-          }
-          var attr = ctx.format(trait, args, errors);
-          if (attr !== null) {
-            formatted.attrs.push([trait.key.ns, trait.key.name, attr]);
-          }
+      // If no good or almost good previous translation is available, return the
+      // current translation.  In case of minor errors it's a partially
+      // formatted translation.  In the worst-case scenario it an identifier of
+      // the requested entity.
+      return translation;
+    });
+
+    return result;
+  };
+
+  /**
+   * @private
+   *
+   * Test if an error is an instance of L10nError.
+   *
+   * @param   {Error}   error
+   * @returns {boolean}
+   */
+
+
+  var isL10nError = function isL10nError(error) {
+    return error instanceof L10nError;
+  };
+
+  // Match the opening angle bracket (<) in HTML tags, and HTML entities like
+  // &amp;, &#0038;, &#x0026;.
+
+
+  /**
+   * Overlay translation onto a DOM element.
+   *
+   * @param   {Element}      element
+   * @param   {string}       translation
+   * @private
+   */
+  var overlayElement = function overlayElement(element, translation) {
+    var value = translation.value;
+
+    if (typeof value === 'string') {
+      if (!reOverlay.test(value)) {
+        // If the translation doesn't contain any markup skip the overlay logic.
+        element.textContent = value;
+      } else {
+        // Else start with an inert template element and move its children into
+        // `element` but such that `element`'s own children are not replaced.
+        var tmpl = element.ownerDocument.createElementNS('http://www.w3.org/1999/xhtml', 'template');
+        tmpl.innerHTML = value;
+        // Overlay the node with the DocumentFragment.
+        overlay(element, tmpl.content);
+      }
+    }
+
+    if (translation.attrs === null) {
+      return;
+    }
+
+    var _iteratorNormalCompletion6 = true;
+    var _didIteratorError6 = false;
+    var _iteratorError6 = undefined;
+
+    try {
+      for (var _iterator6 = translation.attrs[Symbol.iterator](), _step6; !(_iteratorNormalCompletion6 = (_step6 = _iterator6.next()).done); _iteratorNormalCompletion6 = true) {
+        var _step6$value = _slicedToArray(_step6.value, 3),
+            ns = _step6$value[0],
+            name = _step6$value[1],
+            val = _step6$value[2];
+
+        if (DOM_NAMESPACES[ns] === element.namespaceURI && isAttrAllowed({ name: name }, element)) {
+          element.setAttribute(name, val);
         }
       }
-
-      return formatted;
-    };
-
-    /**
-     * @private
-     *
-     * Test if an error is an instance of L10nError.
-     *
-     * @param   {Error}   error
-     * @returns {boolean}
-     */
-
-
-    var isL10nError = function isL10nError(error) {
-      return error instanceof L10nError;
-    };
-
-    /**
-     * Create a `MessageContext` for the first bundle in the fallback chain.
-     *
-     * Fetches the bundle's resources and creates a context from them.
-     *
-     * @param   {Array<ResourceBundle>} bundle
-     * @param   {Function}              createContext
-     * @returns {Promise<MessageContext>}
-     * @private
-     */
-    var createHeadContextWith = function createHeadContextWith(createContext, bundles) {
-      var bundle = bundles[0];
-
-
-      if (!bundle) {
-        return Promise.resolve(null);
-      }
-
-      return bundle.fetch().then(function (resources) {
-        var ctx = createContext(bundle.lang);
-        resources
-        // Filter out resources which failed to load correctly (e.g. 404).
-        .filter(function (res) {
-          return res !== null;
-        }).forEach(function (res) {
-          return ctx.addMessages(res);
-        });
-        // Save the reference to the context.
-        contexts.set(bundle, ctx);
-        return ctx;
-      });
-    };
-
-    /**
-     *
-     * Test if two fallback chains are functionally the same.
-     *
-     * @param   {Array<ResourceBundle>} bundles1
-     * @param   {Array<ResourceBundle>} bundles2
-     * @returns {boolean}
-     * @private
-     */
-
-
-    var equal = function equal(bundles1, bundles2) {
-      return bundles1.length === bundles2.length && bundles1.every(function (_ref21, i) {
-        var lang = _ref21.lang;
-        return lang === bundles2[i].lang;
-      });
-    };
-
-    // A regexp to sanitize HTML tags and entities.
-
-
-    // Unicode bidi isolation characters.
-    //const FSI = '\u2068';
-    //const PDI = '\u2069';
-
-    /**
-     * Sanitize string-typed arguments.
-     *
-     * Escape HTML tags and entities and wrap values in the Unicode Isolation Marks
-     * (FSI and PDI) to ensure the proper directionality of the interpolated text.
-     *
-     * @param   {Object} args
-     * @returns {Object}
-     * @private
-     */
-    var sanitizeArgs = function sanitizeArgs(args) {
-      for (var name in args) {
-        var _arg2 = args[name];
-        if (typeof _arg2 === 'string') {
-          var value = _arg2.replace(reHtml, function (match) {
-            return htmlEntities[match];
-          });
-          args[name] = value;
+    } catch (err) {
+      _didIteratorError6 = true;
+      _iteratorError6 = err;
+    } finally {
+      try {
+        if (!_iteratorNormalCompletion6 && _iterator6.return) {
+          _iterator6.return();
+        }
+      } finally {
+        if (_didIteratorError6) {
+          throw _iteratorError6;
         }
       }
-      return args;
-    };
+    }
+  };
 
-    /**
-     * A bound version of `keysFromContext` using `entityFromContext`.
-     *
-     * @param {MessageContext} ctx
-     * @param {Array<Array>}   keys
-     * @param {{
-     *   errors: Array<Error>,
-     *   hasErrors: boolean,
-     *   translations: Array<{value: string, attrs: Object}>
-     * }} prev
-     * @returns {{
-     *   errors: Array<Error>,
-     *   hasErrors: boolean,
-     *   translations: Array<{value: string, attrs: Object}>
-     * }}
-     * @private
-     */
+  // The goal of overlay is to move the children of `translationElement`
+  // into `sourceElement` such that `sourceElement`'s own children are not
+  // replaced, but only have their text nodes and their attributes modified.
+  //
+  // We want to make it possible for localizers to apply text-level semantics to
+  // the translations and make use of HTML entities. At the same time, we
+  // don't trust translations so we need to filter unsafe elements and
+  // attributes out and we don't want to break the Web by replacing elements to
+  // which third-party code might have created references (e.g. two-way
+  // bindings in MVC frameworks).
 
 
-    var entitiesFromContext = function entitiesFromContext(ctx, keys, prev) {
-      return keysFromContext(entityFromContext, sanitizeArgs, ctx, keys, prev);
-    };
+  var overlay = function overlay(sourceElement, translationElement) {
+    var result = translationElement.ownerDocument.createDocumentFragment();
+    var k = void 0,
+        attr = void 0;
 
-    /**
-     * A bound version of `keysFromContext` using `valueFromContext`.
-     *
-     * @param {MessageContext} ctx
-     * @param {Array<Array>}   keys
-     * @param {{
-     *   errors: Array<Error>,
-     *   hasErrors: boolean,
-     *   translations: Array<string>}} prev
-     * @returns {{
-     *   errors: Array<Error>,
-     *   hasErrors: boolean,
-     *   translations: Array<string>}}
-     * @private
-     */
+    // Take one node from translationElement at a time and check it against
+    // the allowed list or try to match it with a corresponding element
+    // in the source.
+    var childElement = void 0;
+    while (childElement = translationElement.childNodes[0]) {
+      translationElement.removeChild(childElement);
 
+      if (childElement.nodeType === childElement.TEXT_NODE) {
+        result.appendChild(childElement);
+        continue;
+      }
 
-    var valuesFromContext = function valuesFromContext(ctx, keys, prev) {
-      return keysFromContext(valueFromContext, sanitizeArgs, ctx, keys, prev);
-    };
+      var index = getIndexOfType(childElement);
+      var sourceChild = getNthElementOfType(sourceElement, childElement, index);
+      if (sourceChild) {
+        // There is a corresponding element in the source, let's use it.
+        overlay(sourceChild, childElement);
+        result.appendChild(sourceChild);
+        continue;
+      }
 
-    // Match the opening angle bracket (<) in HTML tags, and HTML entities like
-    // &amp;, &#0038;, &#x0026;.
+      if (isElementAllowed(childElement)) {
+        var sanitizedChild = childElement.ownerDocument.createElement(childElement.nodeName);
+        overlay(sanitizedChild, childElement);
+        result.appendChild(sanitizedChild);
+        continue;
+      }
 
+      // Otherwise just take this child's textContent.
+      result.appendChild(translationElement.ownerDocument.createTextNode(childElement.textContent));
+    }
 
-    /**
-     * Overlay translation onto a DOM element.
-     *
-     * @param   {Element}      element
-     * @param   {string}       translation
-     * @private
-     */
-    var overlayElement = function overlayElement(element, translation) {
-      var value = translation.value;
+    // Clear `sourceElement` and append `result` which by this time contains
+    // `sourceElement`'s original children, overlayed with translation.
+    sourceElement.textContent = '';
+    sourceElement.appendChild(result);
 
-      if (typeof value === 'string') {
-        if (!reOverlay.test(value)) {
-          // If the translation doesn't contain any markup skip the overlay logic.
-          element.textContent = value;
-        } else {
-          // Else start with an inert template element and move its children into
-          // `element` but such that `element`'s own children are not replaced.
-          var tmpl = element.ownerDocument.createElementNS('http://www.w3.org/1999/xhtml', 'template');
-          tmpl.innerHTML = value;
-          // Overlay the node with the DocumentFragment.
-          overlay(element, tmpl.content);
+    // If we're overlaying a nested element, translate the allowed
+    // attributes; top-level attributes are handled in `overlayElement`.
+    // XXX Attributes previously set here for another language should be
+    // cleared if a new language doesn't use them; https://bugzil.la/922577
+    if (translationElement.attributes) {
+      for (k = 0, attr; attr = translationElement.attributes[k]; k++) {
+        if (isAttrAllowed(attr, sourceElement)) {
+          sourceElement.setAttribute(attr.name, attr.value);
         }
       }
+    }
+  };
 
-      for (var key in translation.attrs) {
-        var _ref22 = key.includes('/') ? key.split('/', 2) : [null, key],
-            ns = _ref22[0],
-            name = _ref22[1];
-
-        if (isAttrAllowed({ ns: ns, name: name }, element)) {
-          element.setAttribute(name, translation.attrs[key]);
-        }
-      }
-    };
-
-    // The goal of overlay is to move the children of `translationElement`
-    // into `sourceElement` such that `sourceElement`'s own children are not
-    // replaced, but only have their text nodes and their attributes modified.
-    //
-    // We want to make it possible for localizers to apply text-level semantics to
-    // the translations and make use of HTML entities. At the same time, we
-    // don't trust translations so we need to filter unsafe elements and
-    // attributes out and we don't want to break the Web by replacing elements to
-    // which third-party code might have created references (e.g. two-way
-    // bindings in MVC frameworks).
+  /**
+   * Check if element is allowed in the translation.
+   *
+   * This method is used by the sanitizer when the translation markup contains
+   * an element which is not present in the source code.
+   *
+   * @param   {Element} element
+   * @returns {boolean}
+   * @private
+   */
 
 
-    var overlay = function overlay(sourceElement, translationElement) {
-      var result = translationElement.ownerDocument.createDocumentFragment();
-      var k = void 0,
-          attr = void 0;
-
-      // Take one node from translationElement at a time and check it against
-      // the allowed list or try to match it with a corresponding element
-      // in the source.
-      var childElement = void 0;
-      while (childElement = translationElement.childNodes[0]) {
-        translationElement.removeChild(childElement);
-
-        if (childElement.nodeType === childElement.TEXT_NODE) {
-          result.appendChild(childElement);
-          continue;
-        }
-
-        var _index = getIndexOfType(childElement);
-        var sourceChild = getNthElementOfType(sourceElement, childElement, _index);
-        if (sourceChild) {
-          // There is a corresponding element in the source, let's use it.
-          overlay(sourceChild, childElement);
-          result.appendChild(sourceChild);
-          continue;
-        }
-
-        if (isElementAllowed(childElement)) {
-          var sanitizedChild = childElement.ownerDocument.createElement(childElement.nodeName);
-          overlay(sanitizedChild, childElement);
-          result.appendChild(sanitizedChild);
-          continue;
-        }
-
-        // Otherwise just take this child's textContent.
-        result.appendChild(translationElement.ownerDocument.createTextNode(childElement.textContent));
-      }
-
-      // Clear `sourceElement` and append `result` which by this time contains
-      // `sourceElement`'s original children, overlayed with translation.
-      sourceElement.textContent = '';
-      sourceElement.appendChild(result);
-
-      // If we're overlaying a nested element, translate the allowed
-      // attributes; top-level attributes are handled in `overlayElement`.
-      // XXX Attributes previously set here for another language should be
-      // cleared if a new language doesn't use them; https://bugzil.la/922577
-      if (translationElement.attributes) {
-        for (k = 0, attr; attr = translationElement.attributes[k]; k++) {
-          if (isAttrAllowed({
-            ns: DOM_NAMESPACES[translationElement.namespaceURI],
-            name: attr.name
-          }, sourceElement)) {
-            sourceElement.setAttribute(attr.name, attr.value);
-          }
-        }
-      }
-    };
-
-    /**
-     * Check if element is allowed in the translation.
-     *
-     * This method is used by the sanitizer when the translation markup contains
-     * an element which is not present in the source code.
-     *
-     * @param   {Element} element
-     * @returns {boolean}
-     * @private
-     */
-
-
-    var isElementAllowed = function isElementAllowed(element) {
-      var allowed = ALLOWED_ELEMENTS[element.namespaceURI];
-      if (!allowed) {
-        return false;
-      }
-
-      return allowed.indexOf(element.tagName.toLowerCase()) !== -1;
-    };
-
-    /**
-     * Check if attribute is allowed for the given element.
-     *
-     * This method is used by the sanitizer when the translation markup contains
-     * DOM attributes, or when the translation has traits which map to DOM
-     * attributes.
-     *
-     * @param   {{name: string}} attr
-     * @param   {Element}        element
-     * @returns {boolean}
-     * @private
-     */
-
-
-    var isAttrAllowed = function isAttrAllowed(attr, element) {
-      // Does it have a namespace that matches the element's?
-      if (attr.ns === null || DOM_NAMESPACES[attr.ns] !== element.namespaceURI) {
-        return false;
-      }
-      var allowed = ALLOWED_ATTRIBUTES[element.namespaceURI];
-      if (!allowed) {
-        return false;
-      }
-
-      var attrName = attr.name.toLowerCase();
-      var elemName = element.tagName.toLowerCase();
-
-      // Is it a globally safe attribute?
-      if (allowed.global.indexOf(attrName) !== -1) {
-        return true;
-      }
-
-      // Are there no allowed attributes for this element?
-      if (!allowed[elemName]) {
-        return false;
-      }
-
-      // Is it allowed on this element?
-      if (allowed[elemName].indexOf(attrName) !== -1) {
-        return true;
-      }
-
-      // Special case for value on HTML inputs with type button, reset, submit
-      if (element.namespaceURI === 'http://www.w3.org/1999/xhtml' && elemName === 'input' && attrName === 'value') {
-        var type = element.type.toLowerCase();
-        if (type === 'submit' || type === 'button' || type === 'reset') {
-          return true;
-        }
-      }
-
+  var isElementAllowed = function isElementAllowed(element) {
+    var allowed = ALLOWED_ELEMENTS[element.namespaceURI];
+    if (!allowed) {
       return false;
-    };
+    }
 
-    // Get n-th immediate child of context that is of the same type as element.
-    // XXX Use querySelector(':scope > ELEMENT:nth-of-type(index)'), when:
-    // 1) :scope is widely supported in more browsers and 2) it works with
-    // DocumentFragments.
+    return allowed.indexOf(element.tagName.toLowerCase()) !== -1;
+  };
+
+  /**
+   * Check if attribute is allowed for the given element.
+   *
+   * This method is used by the sanitizer when the translation markup contains
+   * DOM attributes, or when the translation has traits which map to DOM
+   * attributes.
+   *
+   * @param   {{name: string}} attr
+   * @param   {Element}        element
+   * @returns {boolean}
+   * @private
+   */
 
 
-    var getNthElementOfType = function getNthElementOfType(context, element, index) {
-      var nthOfType = 0;
-      for (var i = 0, _child; _child = context.children[i]; i++) {
-        if (_child.nodeType === _child.ELEMENT_NODE && _child.tagName.toLowerCase() === element.tagName.toLowerCase()) {
-          if (nthOfType === index) {
-            return _child;
-          }
-          nthOfType++;
-        }
+  var isAttrAllowed = function isAttrAllowed(attr, element) {
+    var allowed = ALLOWED_ATTRIBUTES[element.namespaceURI];
+    if (!allowed) {
+      return false;
+    }
+
+    var attrName = attr.name.toLowerCase();
+    var elemName = element.tagName.toLowerCase();
+
+    // Is it a globally safe attribute?
+    if (allowed.global.indexOf(attrName) !== -1) {
+      return true;
+    }
+
+    // Are there no allowed attributes for this element?
+    if (!allowed[elemName]) {
+      return false;
+    }
+
+    // Is it allowed on this element?
+    if (allowed[elemName].indexOf(attrName) !== -1) {
+      return true;
+    }
+
+    // Special case for value on HTML inputs with type button, reset, submit
+    if (element.namespaceURI === 'http://www.w3.org/1999/xhtml' && elemName === 'input' && attrName === 'value') {
+      var type = element.type.toLowerCase();
+      if (type === 'submit' || type === 'button' || type === 'reset') {
+        return true;
       }
-      return null;
-    };
+    }
 
-    // Get the index of the element among siblings of the same type.
+    return false;
+  };
+
+  // Get n-th immediate child of context that is of the same type as element.
+  // XXX Use querySelector(':scope > ELEMENT:nth-of-type(index)'), when:
+  // 1) :scope is widely supported in more browsers and 2) it works with
+  // DocumentFragments.
 
 
-    var getIndexOfType = function getIndexOfType(element) {
-      var index = 0;
-      var child = void 0;
-      while (child = element.previousElementSibling) {
-        if (child.tagName === element.tagName) {
-          index++;
+  var getNthElementOfType = function getNthElementOfType(context, element, index) {
+    var nthOfType = 0;
+    for (var i = 0, child; child = context.children[i]; i++) {
+      if (child.nodeType === child.ELEMENT_NODE && child.tagName.toLowerCase() === element.tagName.toLowerCase()) {
+        if (nthOfType === index) {
+          return child;
         }
+        nthOfType++;
       }
-      return index;
-    };
+    }
+    return null;
+  };
 
-    var load = function load(url) {
-      return new Promise(function (resolve, reject) {
-        var xhr = new XMLHttpRequest();
+  // Get the index of the element among siblings of the same type.
 
-        if (xhr.overrideMimeType) {
-          xhr.overrideMimeType('text/plain');
-        }
 
-        xhr.open('GET', url, true);
+  var getIndexOfType = function getIndexOfType(element) {
+    var index = 0;
+    var child = void 0;
+    while (child = element.previousElementSibling) {
+      if (child.tagName === element.tagName) {
+        index++;
+      }
+    }
+    return index;
+  };
 
-        xhr.addEventListener('load', function (e) {
-          if (e.target.status === HTTP_STATUS_CODE_OK || e.target.status === 0) {
-            resolve(e.target.responseText);
-          } else {
-            reject(new Error(url + ' not found'));
-          }
-        });
+  // A regexp to sanitize HTML tags and entities.
 
-        xhr.addEventListener('error', function () {
-          return reject(new Error(url + ' failed to load'));
-        });
-        xhr.addEventListener('timeout', function () {
-          return reject(new Error(url + ' timed out'));
-        });
 
-        xhr.send(null);
-      });
-    };
+  var load = function load(url) {
+    return new Promise(function (resolve, reject) {
+      var xhr = new XMLHttpRequest();
 
-    var fetchResource = function fetchResource(res, lang) {
-      var url = res.replace('{locale}', lang);
-      return load(url).catch(function () {
-        return null;
-      });
-    };
-
-    // A document.ready shim
-    // https://github.com/whatwg/html/issues/127
-    var documentReady = function documentReady() {
-      var rs = document.readyState;
-      // !important
-      // if (rs === 'interactive' || rs === 'completed') {
-      if (rs !== 'loading') {
-        return Promise.resolve();
+      if (xhr.overrideMimeType) {
+        xhr.overrideMimeType('text/plain');
       }
 
-      return new Promise(function (resolve) {
-        return document.addEventListener('readystatechange', resolve, { once: true });
-      });
-    };
+      xhr.open('GET', url, true);
 
-    var getResourceLinks = function getResourceLinks(elem) {
-      return Array.prototype.map.call(elem.querySelectorAll('link[rel="localization"]'), function (el) {
-        return [el.getAttribute('href'), el.getAttribute('name') || 'main'];
-      }).reduce(function (seq, _ref30) {
-        var href = _ref30[0],
-            name = _ref30[1];
-        return seq.set(name, (seq.get(name) || []).concat(href));
-      }, new Map());
-    };
-
-    var getMeta = function getMeta(head) {
-      var availableLangs = new Set();
-      var defaultLang = null;
-      var appVersion = null;
-
-      // XXX take last found instead of first?
-      var metas = Array.from(head.querySelectorAll('meta[name="availableLanguages"],' + 'meta[name="defaultLanguage"],' + 'meta[name="appVersion"]'));
-      for (var _iterator13 = metas, _isArray13 = Array.isArray(_iterator13), _i13 = 0, _iterator13 = _isArray13 ? _iterator13 : _iterator13[Symbol.iterator]();;) {
-        var _ref31;
-
-        if (_isArray13) {
-          if (_i13 >= _iterator13.length) break;
-          _ref31 = _iterator13[_i13++];
+      xhr.addEventListener('load', function (e) {
+        if (e.target.status === HTTP_STATUS_CODE_OK || e.target.status === 0) {
+          resolve(e.target.responseText);
         } else {
-          _i13 = _iterator13.next();
-          if (_i13.done) break;
-          _ref31 = _i13.value;
+          reject(new Error(url + ' not found'));
         }
+      });
 
-        var meta = _ref31;
+      xhr.addEventListener('error', function () {
+        return reject(new Error(url + ' failed to load'));
+      });
+      xhr.addEventListener('timeout', function () {
+        return reject(new Error(url + ' timed out'));
+      });
+
+      xhr.send(null);
+    });
+  };
+
+  var fetchResource = function fetchResource(res, lang) {
+    var url = res.replace('{locale}', lang);
+    return load(url).catch(function () {
+      return null;
+    });
+  };
+
+  // A document.ready shim
+  // https://github.com/whatwg/html/issues/127
+  var documentReady = function documentReady() {
+    var rs = document.readyState;
+    if (rs === 'interactive' || rs === 'completed') {
+      return Promise.resolve();
+    }
+
+    return new Promise(function (resolve) {
+      return document.addEventListener('readystatechange', resolve, { once: true });
+    });
+  };
+
+  var getResourceLinks = function getResourceLinks(elem) {
+    return Array.prototype.map.call(elem.querySelectorAll('link[rel="localization"]'), function (el) {
+      return [el.getAttribute('href'), el.getAttribute('name') || 'main'];
+    }).reduce(function (seq, _ref23) {
+      var _ref24 = _slicedToArray(_ref23, 2),
+          href = _ref24[0],
+          name = _ref24[1];
+
+      return seq.set(name, (seq.get(name) || []).concat(href));
+    }, new Map());
+  };
+
+  var getMeta = function getMeta(head) {
+    var availableLangs = [];
+    var defaultLang = null;
+    var appVersion = null;
+
+    // XXX take last found instead of first?
+    var metas = Array.from(head.querySelectorAll('meta[name="availableLanguages"],' + 'meta[name="defaultLanguage"],' + 'meta[name="appVersion"]'));
+    var _iteratorNormalCompletion10 = true;
+    var _didIteratorError10 = false;
+    var _iteratorError10 = undefined;
+
+    try {
+      for (var _iterator10 = metas[Symbol.iterator](), _step10; !(_iteratorNormalCompletion10 = (_step10 = _iterator10.next()).done); _iteratorNormalCompletion10 = true) {
+        var meta = _step10.value;
 
         var name = meta.getAttribute('name');
-        var _content = meta.getAttribute('content').trim();
+        var content = meta.getAttribute('content').trim();
         switch (name) {
           case 'availableLanguages':
-            availableLangs = new Set(_content.split(',').map(function (lang) {
+            availableLangs = content.split(',').map(function (lang) {
               return lang.trim();
-            }));
+            });
             break;
           case 'defaultLanguage':
-            defaultLang = _content;
+            defaultLang = content;
             break;
           case 'appVersion':
-            appVersion = _content;
+            appVersion = content;
         }
       }
-
-      return {
-        defaultLang: defaultLang,
-        availableLangs: availableLangs,
-        appVersion: appVersion
-      };
-    };
-
-    var createContext = function createContext(lang) {
-      return new Intl.MessageContext(lang);
-    };
-
-    var createLocalization = function createLocalization(name, resIds, defaultLang, availableLangs) {
-
-      function requestBundles() {
-        var requestedLangs = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : new Set(PrioritizeLocales(availableLangs, navigator.languages.slice(), defaultLang));
-
-        var newLangs = prioritizeLocales(defaultLang, availableLangs, requestedLangs);
-
-        var bundles = [];
-        newLangs.forEach(function (lang) {
-          bundles.push(new ResourceBundle(lang, resIds));
-        });
-        return Promise.resolve(bundles);
+    } catch (err) {
+      _didIteratorError10 = true;
+      _iteratorError10 = err;
+    } finally {
+      try {
+        if (!_iteratorNormalCompletion10 && _iterator10.return) {
+          _iterator10.return();
+        }
+      } finally {
+        if (_didIteratorError10) {
+          throw _iteratorError10;
+        }
       }
-
-      var l10n = new Localization(requestBundles, createContext);
-      document.l10n.set(name, l10n);
-
-      if (name === 'main') {
-        var rootElem = document.documentElement;
-        document.l10n.observeRoot(rootElem, l10n);
-        document.l10n.translateRoot(rootElem, l10n);
-      }
-    };
-
-    // See docs/compat.md for more information on providing polyfills which are
-    // required for l20n.js to work in legacy browsers.
-    //
-    // The following are simple fixes which aren't included in any of the popular
-    // polyfill libraries.
-
-    // IE, Safari and Opera don't support it yet
-    if (typeof navigator !== 'undefined' && navigator.languages === undefined) {
-      navigator.languages = [navigator.language];
     }
 
-    // iOS Safari doesn't even have the Intl object defined
-    if (typeof Intl === 'undefined') {
-      window.Intl = {};
+    return {
+      defaultLang: defaultLang,
+      availableLangs: availableLangs,
+      appVersion: appVersion
+    };
+  };
+
+  // This function is provided to the constructor of `Localization` object and is
+  // used to create new `MessageContext` objects for a given `lang` with selected
+  // builtin functions.
+
+
+  var createContext = function createContext(lang) {
+    return new Intl.MessageContext(lang);
+  };
+
+  // Called for every named Localization declared via <link name=…> elements.
+
+
+  var createLocalization = function createLocalization(defaultLang, availableLangs, resIds, name) {
+    // This function is called by `Localization` class to retrieve an array of
+    // `ResourceBundle`s.
+    function requestBundles() {
+      var requestedLangs = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : navigator.languages;
+
+      var newLangs = prioritizeLocales(availableLangs, requestedLangs, defaultLang);
+
+      var bundles = newLangs.map(function (lang) {
+        return new ResourceBundle(lang, resIds);
+      });
+
+      return Promise.resolve(bundles);
     }
 
-    /*eslint no-magic-numbers: [0]*/
+    if (name === 'main') {
+      document.l10n = new DocumentLocalization(requestBundles, createContext);
+      document.l10n.ready = documentReady().then(function () {
+        document.l10n.connectRoot(document.documentElement);
+        return document.l10n.translateDocument();
+      }).then(function () {
+        window.addEventListener('languagechange', document.l10n);
+      });
+    } else {
+      // Pass the main Localization, `document.l10n`, as the observer.
+      var l10n = new DOMLocalization(requestBundles, createContext, name, document.l10n);
+      // Add this Localization as a delegate of the main one.
+      document.l10n.delegates.set(name, l10n);
+    }
+  };
 
-    var locales2rules = {
-      'af': 3,
-      'ak': 4,
-      'am': 4,
-      'ar': 1,
-      'asa': 3,
-      'az': 0,
-      'be': 11,
-      'bem': 3,
-      'bez': 3,
-      'bg': 3,
-      'bh': 4,
-      'bm': 0,
-      'bn': 3,
-      'bo': 0,
-      'br': 20,
-      'brx': 3,
-      'bs': 11,
-      'ca': 3,
-      'cgg': 3,
-      'chr': 3,
-      'cs': 12,
-      'cy': 17,
-      'da': 3,
-      'de': 3,
-      'dv': 3,
-      'dz': 0,
-      'ee': 3,
-      'el': 3,
-      'en': 3,
-      'eo': 3,
-      'es': 3,
-      'et': 3,
-      'eu': 3,
-      'fa': 0,
-      'ff': 5,
-      'fi': 3,
-      'fil': 4,
-      'fo': 3,
-      'fr': 5,
-      'fur': 3,
-      'fy': 3,
-      'ga': 8,
-      'gd': 24,
-      'gl': 3,
-      'gsw': 3,
-      'gu': 3,
-      'guw': 4,
-      'gv': 23,
-      'ha': 3,
-      'haw': 3,
-      'he': 2,
-      'hi': 4,
-      'hr': 11,
-      'hu': 0,
-      'id': 0,
-      'ig': 0,
-      'ii': 0,
-      'is': 3,
-      'it': 3,
-      'iu': 7,
-      'ja': 0,
-      'jmc': 3,
-      'jv': 0,
-      'ka': 0,
-      'kab': 5,
-      'kaj': 3,
-      'kcg': 3,
-      'kde': 0,
-      'kea': 0,
-      'kk': 3,
-      'kl': 3,
-      'km': 0,
-      'kn': 0,
-      'ko': 0,
-      'ksb': 3,
-      'ksh': 21,
-      'ku': 3,
-      'kw': 7,
-      'lag': 18,
-      'lb': 3,
-      'lg': 3,
-      'ln': 4,
-      'lo': 0,
-      'lt': 10,
-      'lv': 6,
-      'mas': 3,
-      'mg': 4,
-      'mk': 16,
-      'ml': 3,
-      'mn': 3,
-      'mo': 9,
-      'mr': 3,
-      'ms': 0,
-      'mt': 15,
-      'my': 0,
-      'nah': 3,
-      'naq': 7,
-      'nb': 3,
-      'nd': 3,
-      'ne': 3,
-      'nl': 3,
-      'nn': 3,
-      'no': 3,
-      'nr': 3,
-      'nso': 4,
-      'ny': 3,
-      'nyn': 3,
-      'om': 3,
-      'or': 3,
-      'pa': 3,
-      'pap': 3,
-      'pl': 13,
-      'ps': 3,
-      'pt': 3,
-      'rm': 3,
-      'ro': 9,
-      'rof': 3,
-      'ru': 11,
-      'rwk': 3,
-      'sah': 0,
-      'saq': 3,
-      'se': 7,
-      'seh': 3,
-      'ses': 0,
-      'sg': 0,
-      'sh': 11,
-      'shi': 19,
-      'sk': 12,
-      'sl': 14,
-      'sma': 7,
-      'smi': 7,
-      'smj': 7,
-      'smn': 7,
-      'sms': 7,
-      'sn': 3,
-      'so': 3,
-      'sq': 3,
-      'sr': 11,
-      'ss': 3,
-      'ssy': 3,
-      'st': 3,
-      'sv': 3,
-      'sw': 3,
-      'syr': 3,
-      'ta': 3,
-      'te': 3,
-      'teo': 3,
-      'th': 0,
-      'ti': 4,
-      'tig': 3,
-      'tk': 3,
-      'tl': 4,
-      'tn': 3,
-      'to': 0,
-      'tr': 0,
-      'ts': 3,
-      'tzm': 22,
-      'uk': 11,
-      'ur': 3,
-      've': 3,
-      'vi': 0,
-      'vun': 3,
-      'wa': 4,
-      'wae': 3,
-      'wo': 0,
-      'xh': 3,
-      'xog': 3,
-      'yo': 0,
-      'zh': 0,
-      'zu': 3
-    };var pluralRules = {
-      '0': function _() {
-        return 'other';
-      },
-      '1': function _(n) {
-        if (isBetween(n % 100, 3, 10)) {
-          return 'few';
-        }
-        if (n === 0) {
-          return 'zero';
-        }
-        if (isBetween(n % 100, 11, 99)) {
-          return 'many';
-        }
-        if (n === 2) {
-          return 'two';
-        }
-        if (n === 1) {
-          return 'one';
-        }
-        return 'other';
-      },
-      '2': function _(n) {
-        if (n !== 0 && n % 10 === 0) {
-          return 'many';
-        }
-        if (n === 2) {
-          return 'two';
-        }
-        if (n === 1) {
-          return 'one';
-        }
-        return 'other';
-      },
-      '3': function _(n) {
-        if (n === 1) {
-          return 'one';
-        }
-        return 'other';
-      },
-      '4': function _(n) {
-        if (isBetween(n, 0, 1)) {
-          return 'one';
-        }
-        return 'other';
-      },
-      '5': function _(n) {
-        if (isBetween(n, 0, 2) && n !== 2) {
-          return 'one';
-        }
-        return 'other';
-      },
-      '6': function _(n) {
-        if (n === 0) {
-          return 'zero';
-        }
-        if (n % 10 === 1 && n % 100 !== 11) {
-          return 'one';
-        }
-        return 'other';
-      },
-      '7': function _(n) {
-        if (n === 2) {
-          return 'two';
-        }
-        if (n === 1) {
-          return 'one';
-        }
-        return 'other';
-      },
-      '8': function _(n) {
-        if (isBetween(n, 3, 6)) {
-          return 'few';
-        }
-        if (isBetween(n, 7, 10)) {
-          return 'many';
-        }
-        if (n === 2) {
-          return 'two';
-        }
-        if (n === 1) {
-          return 'one';
-        }
-        return 'other';
-      },
-      '9': function _(n) {
-        if (n === 0 || n !== 1 && isBetween(n % 100, 1, 19)) {
-          return 'few';
-        }
-        if (n === 1) {
-          return 'one';
-        }
-        return 'other';
-      },
-      '10': function _(n) {
-        if (isBetween(n % 10, 2, 9) && !isBetween(n % 100, 11, 19)) {
-          return 'few';
-        }
-        if (n % 10 === 1 && !isBetween(n % 100, 11, 19)) {
-          return 'one';
-        }
-        return 'other';
-      },
-      '11': function _(n) {
-        if (isBetween(n % 10, 2, 4) && !isBetween(n % 100, 12, 14)) {
-          return 'few';
-        }
-        if (n % 10 === 0 || isBetween(n % 10, 5, 9) || isBetween(n % 100, 11, 14)) {
-          return 'many';
-        }
-        if (n % 10 === 1 && n % 100 !== 11) {
-          return 'one';
-        }
-        return 'other';
-      },
-      '12': function _(n) {
-        if (isBetween(n, 2, 4)) {
-          return 'few';
-        }
-        if (n === 1) {
-          return 'one';
-        }
-        return 'other';
-      },
-      '13': function _(n) {
-        if (n % 1 !== 0) {
-          return 'other';
-        }
-        if (isBetween(n % 10, 2, 4) && !isBetween(n % 100, 12, 14)) {
-          return 'few';
-        }
-        if (n !== 1 && isBetween(n % 10, 0, 1) || isBetween(n % 10, 5, 9) || isBetween(n % 100, 12, 14)) {
-          return 'many';
-        }
-        if (n === 1) {
-          return 'one';
-        }
-        return 'other';
-      },
-      '14': function _(n) {
-        if (isBetween(n % 100, 3, 4)) {
-          return 'few';
-        }
-        if (n % 100 === 2) {
-          return 'two';
-        }
-        if (n % 100 === 1) {
-          return 'one';
-        }
-        return 'other';
-      },
-      '15': function _(n) {
-        if (n === 0 || isBetween(n % 100, 2, 10)) {
-          return 'few';
-        }
-        if (isBetween(n % 100, 11, 19)) {
-          return 'many';
-        }
-        if (n === 1) {
-          return 'one';
-        }
-        return 'other';
-      },
-      '16': function _(n) {
-        if (n % 10 === 1 && n !== 11) {
-          return 'one';
-        }
-        return 'other';
-      },
-      '17': function _(n) {
-        if (n === 3) {
-          return 'few';
-        }
-        if (n === 0) {
-          return 'zero';
-        }
-        if (n === 6) {
-          return 'many';
-        }
-        if (n === 2) {
-          return 'two';
-        }
-        if (n === 1) {
-          return 'one';
-        }
-        return 'other';
-      },
-      '18': function _(n) {
-        if (n === 0) {
-          return 'zero';
-        }
-        if (isBetween(n, 0, 2) && n !== 0 && n !== 2) {
-          return 'one';
-        }
-        return 'other';
-      },
-      '19': function _(n) {
-        if (isBetween(n, 2, 10)) {
-          return 'few';
-        }
-        if (isBetween(n, 0, 1)) {
-          return 'one';
-        }
-        return 'other';
-      },
-      '20': function _(n) {
-        if ((isBetween(n % 10, 3, 4) || n % 10 === 9) && !(isBetween(n % 100, 10, 19) || isBetween(n % 100, 70, 79) || isBetween(n % 100, 90, 99))) {
-          return 'few';
-        }
-        if (n % 1000000 === 0 && n !== 0) {
-          return 'many';
-        }
-        if (n % 10 === 2 && !isIn(n % 100, [12, 72, 92])) {
-          return 'two';
-        }
-        if (n % 10 === 1 && !isIn(n % 100, [11, 71, 91])) {
-          return 'one';
-        }
-        return 'other';
-      },
-      '21': function _(n) {
-        if (n === 0) {
-          return 'zero';
-        }
-        if (n === 1) {
-          return 'one';
-        }
-        return 'other';
-      },
-      '22': function _(n) {
-        if (isBetween(n, 0, 1) || isBetween(n, 11, 99)) {
-          return 'one';
-        }
-        return 'other';
-      },
-      '23': function _(n) {
-        if (isBetween(n % 10, 1, 2) || n % 20 === 0) {
-          return 'one';
-        }
-        return 'other';
-      },
-      '24': function _(n) {
-        if (isBetween(n, 3, 10) || isBetween(n, 13, 19)) {
-          return 'few';
-        }
-        if (isIn(n, [2, 12])) {
-          return 'two';
-        }
-        if (isIn(n, [1, 11])) {
-          return 'one';
-        }
+  // See docs/compat.md for more information on providing polyfills which are
+  // required for l20n.js to work in legacy browsers.
+  //
+  // The following are simple fixes which aren't included in any of the popular
+  // polyfill libraries.
+
+  // IE, Safari and Opera don't support it yet
+  if (typeof navigator !== 'undefined' && navigator.languages === undefined) {
+    navigator.languages = [navigator.language];
+  }
+
+  // iOS Safari doesn't even have the Intl object defined
+  if (typeof Intl === 'undefined') {
+    window.Intl = {};
+  }
+
+  /*  eslint no-magic-numbers: [0]  */
+
+  var locales2rules = {
+    'af': 3,
+    'ak': 4,
+    'am': 4,
+    'ar': 1,
+    'asa': 3,
+    'az': 0,
+    'be': 11,
+    'bem': 3,
+    'bez': 3,
+    'bg': 3,
+    'bh': 4,
+    'bm': 0,
+    'bn': 3,
+    'bo': 0,
+    'br': 20,
+    'brx': 3,
+    'bs': 11,
+    'ca': 3,
+    'cgg': 3,
+    'chr': 3,
+    'cs': 12,
+    'cy': 17,
+    'da': 3,
+    'de': 3,
+    'dv': 3,
+    'dz': 0,
+    'ee': 3,
+    'el': 3,
+    'en': 3,
+    'eo': 3,
+    'es': 3,
+    'et': 3,
+    'eu': 3,
+    'fa': 0,
+    'ff': 5,
+    'fi': 3,
+    'fil': 4,
+    'fo': 3,
+    'fr': 5,
+    'fur': 3,
+    'fy': 3,
+    'ga': 8,
+    'gd': 24,
+    'gl': 3,
+    'gsw': 3,
+    'gu': 3,
+    'guw': 4,
+    'gv': 23,
+    'ha': 3,
+    'haw': 3,
+    'he': 2,
+    'hi': 4,
+    'hr': 11,
+    'hu': 0,
+    'id': 0,
+    'ig': 0,
+    'ii': 0,
+    'is': 3,
+    'it': 3,
+    'iu': 7,
+    'ja': 0,
+    'jmc': 3,
+    'jv': 0,
+    'ka': 0,
+    'kab': 5,
+    'kaj': 3,
+    'kcg': 3,
+    'kde': 0,
+    'kea': 0,
+    'kk': 3,
+    'kl': 3,
+    'km': 0,
+    'kn': 0,
+    'ko': 0,
+    'ksb': 3,
+    'ksh': 21,
+    'ku': 3,
+    'kw': 7,
+    'lag': 18,
+    'lb': 3,
+    'lg': 3,
+    'ln': 4,
+    'lo': 0,
+    'lt': 10,
+    'lv': 6,
+    'mas': 3,
+    'mg': 4,
+    'mk': 16,
+    'ml': 3,
+    'mn': 3,
+    'mo': 9,
+    'mr': 3,
+    'ms': 0,
+    'mt': 15,
+    'my': 0,
+    'nah': 3,
+    'naq': 7,
+    'nb': 3,
+    'nd': 3,
+    'ne': 3,
+    'nl': 3,
+    'nn': 3,
+    'no': 3,
+    'nr': 3,
+    'nso': 4,
+    'ny': 3,
+    'nyn': 3,
+    'om': 3,
+    'or': 3,
+    'pa': 3,
+    'pap': 3,
+    'pl': 13,
+    'ps': 3,
+    'pt': 3,
+    'rm': 3,
+    'ro': 9,
+    'rof': 3,
+    'ru': 11,
+    'rwk': 3,
+    'sah': 0,
+    'saq': 3,
+    'se': 7,
+    'seh': 3,
+    'ses': 0,
+    'sg': 0,
+    'sh': 11,
+    'shi': 19,
+    'sk': 12,
+    'sl': 14,
+    'sma': 7,
+    'smi': 7,
+    'smj': 7,
+    'smn': 7,
+    'sms': 7,
+    'sn': 3,
+    'so': 3,
+    'sq': 3,
+    'sr': 11,
+    'ss': 3,
+    'ssy': 3,
+    'st': 3,
+    'sv': 3,
+    'sw': 3,
+    'syr': 3,
+    'ta': 3,
+    'te': 3,
+    'teo': 3,
+    'th': 0,
+    'ti': 4,
+    'tig': 3,
+    'tk': 3,
+    'tl': 4,
+    'tn': 3,
+    'to': 0,
+    'tr': 0,
+    'ts': 3,
+    'tzm': 22,
+    'uk': 11,
+    'ur': 3,
+    've': 3,
+    'vi': 0,
+    'vun': 3,
+    'wa': 4,
+    'wae': 3,
+    'wo': 0,
+    'xh': 3,
+    'xog': 3,
+    'yo': 0,
+    'zh': 0,
+    'zu': 3
+  };var pluralRules = {
+    '0': function _() {
+      return 'other';
+    },
+    '1': function _(n) {
+      if (isBetween(n % 100, 3, 10)) {
+        return 'few';
+      }
+      if (n === 0) {
+        return 'zero';
+      }
+      if (isBetween(n % 100, 11, 99)) {
+        return 'many';
+      }
+      if (n === 2) {
+        return 'two';
+      }
+      if (n === 1) {
+        return 'one';
+      }
+      return 'other';
+    },
+    '2': function _(n) {
+      if (n !== 0 && n % 10 === 0) {
+        return 'many';
+      }
+      if (n === 2) {
+        return 'two';
+      }
+      if (n === 1) {
+        return 'one';
+      }
+      return 'other';
+    },
+    '3': function _(n) {
+      if (n === 1) {
+        return 'one';
+      }
+      return 'other';
+    },
+    '4': function _(n) {
+      if (isBetween(n, 0, 1)) {
+        return 'one';
+      }
+      return 'other';
+    },
+    '5': function _(n) {
+      if (isBetween(n, 0, 2) && n !== 2) {
+        return 'one';
+      }
+      return 'other';
+    },
+    '6': function _(n) {
+      if (n === 0) {
+        return 'zero';
+      }
+      if (n % 10 === 1 && n % 100 !== 11) {
+        return 'one';
+      }
+      return 'other';
+    },
+    '7': function _(n) {
+      if (n === 2) {
+        return 'two';
+      }
+      if (n === 1) {
+        return 'one';
+      }
+      return 'other';
+    },
+    '8': function _(n) {
+      if (isBetween(n, 3, 6)) {
+        return 'few';
+      }
+      if (isBetween(n, 7, 10)) {
+        return 'many';
+      }
+      if (n === 2) {
+        return 'two';
+      }
+      if (n === 1) {
+        return 'one';
+      }
+      return 'other';
+    },
+    '9': function _(n) {
+      if (n === 0 || n !== 1 && isBetween(n % 100, 1, 19)) {
+        return 'few';
+      }
+      if (n === 1) {
+        return 'one';
+      }
+      return 'other';
+    },
+    '10': function _(n) {
+      if (isBetween(n % 10, 2, 9) && !isBetween(n % 100, 11, 19)) {
+        return 'few';
+      }
+      if (n % 10 === 1 && !isBetween(n % 100, 11, 19)) {
+        return 'one';
+      }
+      return 'other';
+    },
+    '11': function _(n) {
+      if (isBetween(n % 10, 2, 4) && !isBetween(n % 100, 12, 14)) {
+        return 'few';
+      }
+      if (n % 10 === 0 || isBetween(n % 10, 5, 9) || isBetween(n % 100, 11, 14)) {
+        return 'many';
+      }
+      if (n % 10 === 1 && n % 100 !== 11) {
+        return 'one';
+      }
+      return 'other';
+    },
+    '12': function _(n) {
+      if (isBetween(n, 2, 4)) {
+        return 'few';
+      }
+      if (n === 1) {
+        return 'one';
+      }
+      return 'other';
+    },
+    '13': function _(n) {
+      if (n % 1 !== 0) {
         return 'other';
       }
-    };
-
-    var L10nError = function (_Error) {
-      _inherits(L10nError, _Error);
-
-      function L10nError(message, id, lang) {
-        _classCallCheck(this, L10nError);
-
-        var _this = _possibleConstructorReturn(this, _Error.call(this));
-
-        _this.name = 'L10nError';
-        _this.message = message;
-        _this.id = id;
-        _this.lang = lang;
-        return _this;
+      if (isBetween(n % 10, 2, 4) && !isBetween(n % 100, 12, 14)) {
+        return 'few';
       }
-
-      return L10nError;
-    }(Error);
-
-    /*eslint no-magic-numbers: [0]*/
-
-    var MAX_PLACEABLES = 100;
-
-    /**
-     * The `Parser` class is responsible for parsing FTL resources.
-     *
-     * It's only public method is `getResource(source)` which takes an FTL
-     * string and returns a two element Array with an Object of entries
-     * generated from the source as the first element and an array of L10nError
-     * objects as the second.
-     *
-     * This parser is optimized for runtime performance.
-     *
-     * There is an equivalent of this parser in ftl/ast/parser which is
-     * generating full AST which is useful for FTL tools.
-     */
-
-    var EntriesParser = function () {
-      function EntriesParser() {
-        _classCallCheck(this, EntriesParser);
+      if (n !== 1 && isBetween(n % 10, 0, 1) || isBetween(n % 10, 5, 9) || isBetween(n % 100, 12, 14)) {
+        return 'many';
       }
+      if (n === 1) {
+        return 'one';
+      }
+      return 'other';
+    },
+    '14': function _(n) {
+      if (isBetween(n % 100, 3, 4)) {
+        return 'few';
+      }
+      if (n % 100 === 2) {
+        return 'two';
+      }
+      if (n % 100 === 1) {
+        return 'one';
+      }
+      return 'other';
+    },
+    '15': function _(n) {
+      if (n === 0 || isBetween(n % 100, 2, 10)) {
+        return 'few';
+      }
+      if (isBetween(n % 100, 11, 19)) {
+        return 'many';
+      }
+      if (n === 1) {
+        return 'one';
+      }
+      return 'other';
+    },
+    '16': function _(n) {
+      if (n % 10 === 1 && n !== 11) {
+        return 'one';
+      }
+      return 'other';
+    },
+    '17': function _(n) {
+      if (n === 3) {
+        return 'few';
+      }
+      if (n === 0) {
+        return 'zero';
+      }
+      if (n === 6) {
+        return 'many';
+      }
+      if (n === 2) {
+        return 'two';
+      }
+      if (n === 1) {
+        return 'one';
+      }
+      return 'other';
+    },
+    '18': function _(n) {
+      if (n === 0) {
+        return 'zero';
+      }
+      if (isBetween(n, 0, 2) && n !== 0 && n !== 2) {
+        return 'one';
+      }
+      return 'other';
+    },
+    '19': function _(n) {
+      if (isBetween(n, 2, 10)) {
+        return 'few';
+      }
+      if (isBetween(n, 0, 1)) {
+        return 'one';
+      }
+      return 'other';
+    },
+    '20': function _(n) {
+      if ((isBetween(n % 10, 3, 4) || n % 10 === 9) && !(isBetween(n % 100, 10, 19) || isBetween(n % 100, 70, 79) || isBetween(n % 100, 90, 99))) {
+        return 'few';
+      }
+      if (n % 1000000 === 0 && n !== 0) {
+        return 'many';
+      }
+      if (n % 10 === 2 && !isIn(n % 100, [12, 72, 92])) {
+        return 'two';
+      }
+      if (n % 10 === 1 && !isIn(n % 100, [11, 71, 91])) {
+        return 'one';
+      }
+      return 'other';
+    },
+    '21': function _(n) {
+      if (n === 0) {
+        return 'zero';
+      }
+      if (n === 1) {
+        return 'one';
+      }
+      return 'other';
+    },
+    '22': function _(n) {
+      if (isBetween(n, 0, 1) || isBetween(n, 11, 99)) {
+        return 'one';
+      }
+      return 'other';
+    },
+    '23': function _(n) {
+      if (isBetween(n % 10, 1, 2) || n % 20 === 0) {
+        return 'one';
+      }
+      return 'other';
+    },
+    '24': function _(n) {
+      if (isBetween(n, 3, 10) || isBetween(n, 13, 19)) {
+        return 'few';
+      }
+      if (isIn(n, [2, 12])) {
+        return 'two';
+      }
+      if (isIn(n, [1, 11])) {
+        return 'one';
+      }
+      return 'other';
+    }
+  };
+
+  var L10nError = function (_Error) {
+    _inherits(L10nError, _Error);
+
+    function L10nError(message, id, lang) {
+      _classCallCheck(this, L10nError);
+
+      var _this = _possibleConstructorReturn(this, (L10nError.__proto__ || Object.getPrototypeOf(L10nError)).call(this));
+
+      _this.name = 'L10nError';
+      _this.message = message;
+      _this.id = id;
+      _this.lang = lang;
+      return _this;
+    }
+
+    return L10nError;
+  }(Error);
+
+  /*  eslint no-magic-numbers: [0]  */
+
+  var MAX_PLACEABLES = 100;
+
+  /**
+   * The `Parser` class is responsible for parsing FTL resources.
+   *
+   * It's only public method is `getResource(source)` which takes an FTL
+   * string and returns a two element Array with an Object of entries
+   * generated from the source as the first element and an array of L10nError
+   * objects as the second.
+   *
+   * This parser is optimized for runtime performance.
+   *
+   * There is an equivalent of this parser in ftl/ast/parser which is
+   * generating full AST which is useful for FTL tools.
+   */
+
+  var EntriesParser = function () {
+    function EntriesParser() {
+      _classCallCheck(this, EntriesParser);
+    }
+
+    _createClass(EntriesParser, [{
+      key: 'getResource',
 
       /**
        * @param {string} string
        * @returns {{}, []]}
        */
-      EntriesParser.prototype.getResource = function getResource(string) {
+      value: function getResource(string) {
         this._source = string;
         this._index = 0;
         this._length = string.length;
@@ -1855,9 +1926,10 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
         }
 
         return [entries, errors];
-      };
-
-      EntriesParser.prototype.getEntry = function getEntry(entries) {
+      }
+    }, {
+      key: 'getEntry',
+      value: function getEntry(entries) {
         // The pointer here should either be at the beginning of the file
         // or right after new line.
         if (this._index !== 0 && this._source[this._index - 1] !== '\n') {
@@ -1880,9 +1952,10 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
         if (ch !== '\n') {
           this.getEntity(entries);
         }
-      };
-
-      EntriesParser.prototype.getSection = function getSection() {
+      }
+    }, {
+      key: 'getSection',
+      value: function getSection() {
         this._index += 1;
         if (this._source[this._index] !== '[') {
           throw this.error('Expected "[[" to open a section');
@@ -1902,9 +1975,10 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
 
         // sections are ignored in the runtime ast
         return undefined;
-      };
-
-      EntriesParser.prototype.getEntity = function getEntity(entries) {
+      }
+    }, {
+      key: 'getEntity',
+      value: function getEntity(entries) {
         var id = this.getIdentifier();
 
         this.getLineWS();
@@ -1933,10 +2007,10 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
 
         if (ch === '[' && this._source[this._index + 1] !== '[' || ch === '*') {
 
-          var _members = this.getMembers();
+          var members = this.getMembers();
           entries[id] = {
-            traits: _members[0],
-            def: _members[1],
+            traits: members[0],
+            def: members[1],
             val: val
           };
         } else if (typeof val === 'string') {
@@ -1948,25 +2022,28 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
             val: val
           };
         }
-      };
-
-      EntriesParser.prototype.getWS = function getWS() {
+      }
+    }, {
+      key: 'getWS',
+      value: function getWS() {
         var cc = this._source.charCodeAt(this._index);
         // space, \n, \t, \r
         while (cc === 32 || cc === 10 || cc === 9 || cc === 13) {
           cc = this._source.charCodeAt(++this._index);
         }
-      };
-
-      EntriesParser.prototype.getLineWS = function getLineWS() {
+      }
+    }, {
+      key: 'getLineWS',
+      value: function getLineWS() {
         var cc = this._source.charCodeAt(this._index);
         // space, \t
         while (cc === 32 || cc === 9) {
           cc = this._source.charCodeAt(++this._index);
         }
-      };
-
-      EntriesParser.prototype.getIdentifier = function getIdentifier() {
+      }
+    }, {
+      key: 'getIdentifier',
+      value: function getIdentifier() {
         var start = this._index;
         var cc = this._source.charCodeAt(this._index);
 
@@ -1988,9 +2065,10 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
         }
 
         return this._source.slice(start, this._index);
-      };
-
-      EntriesParser.prototype.getKeyword = function getKeyword() {
+      }
+    }, {
+      key: 'getKeyword',
+      value: function getKeyword() {
         var name = '';
         var namespace = this.getIdentifier();
 
@@ -2049,7 +2127,7 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
         name += this._source.slice(start, this._index);
 
         return namespace ? { type: 'kw', ns: namespace, name: name } : { type: 'kw', name: name };
-      };
+      }
 
       // We're going to first try to see if the pattern is simple.
       // If it is a simple, not quote-delimited string,
@@ -2058,8 +2136,9 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
       // Then, if either the line contains a placeable opening `{` or the
       // next line starts with a pipe `|`, we switch to complex pattern.
 
-
-      EntriesParser.prototype.getPattern = function getPattern() {
+    }, {
+      key: 'getPattern',
+      value: function getPattern() {
         var start = this._index;
         if (this._source[start] === '"') {
           return this.getComplexPattern();
@@ -2086,12 +2165,13 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
         }
 
         return line;
-      };
+      }
 
       /* eslint-disable complexity */
 
-
-      EntriesParser.prototype.getComplexPattern = function getComplexPattern() {
+    }, {
+      key: 'getComplexPattern',
+      value: function getComplexPattern() {
         var buffer = '';
         var content = [];
         var placeables = 0;
@@ -2193,10 +2273,12 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
         }
 
         return content;
-      };
+      }
       /* eslint-enable complexity */
 
-      EntriesParser.prototype.getPlaceable = function getPlaceable() {
+    }, {
+      key: 'getPlaceable',
+      value: function getPlaceable() {
         this._index++;
 
         var expressions = [];
@@ -2204,17 +2286,17 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
         this.getLineWS();
 
         while (this._index < this._length) {
-          var _start = this._index;
+          var start = this._index;
           try {
             expressions.push(this.getPlaceableExpression());
           } catch (e) {
-            throw this.error(e.description, _start);
+            throw this.error(e.description, start);
           }
-          var _ch = this._source[this._index];
-          if (_ch === '}') {
+          var ch = this._source[this._index];
+          if (ch === '}') {
             this._index++;
             break;
-          } else if (_ch === ',') {
+          } else if (ch === ',') {
             this._index++;
             this.getWS();
           } else {
@@ -2223,9 +2305,10 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
         }
 
         return expressions;
-      };
-
-      EntriesParser.prototype.getPlaceableExpression = function getPlaceableExpression() {
+      }
+    }, {
+      key: 'getPlaceableExpression',
+      value: function getPlaceableExpression() {
         var selector = this.getCallExpression();
         var members = void 0;
 
@@ -2265,9 +2348,10 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
           vars: members[0],
           def: members[1]
         };
-      };
-
-      EntriesParser.prototype.getCallExpression = function getCallExpression() {
+      }
+    }, {
+      key: 'getCallExpression',
+      value: function getCallExpression() {
         var exp = this.getMemberExpression();
 
         if (this._source[this._index] !== '(') {
@@ -2289,9 +2373,10 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
           name: exp,
           args: args
         };
-      };
-
-      EntriesParser.prototype.getCallArgs = function getCallArgs() {
+      }
+    }, {
+      key: 'getCallArgs',
+      value: function getCallArgs() {
         var args = [];
 
         if (this._source[this._index] === ')') {
@@ -2301,12 +2386,12 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
         while (this._index < this._length) {
           this.getLineWS();
 
-          var _exp = this.getCallExpression();
+          var exp = this.getCallExpression();
 
           // EntityReference in this place may be an entity reference, like:
           // `call(foo)`, or, if it's followed by `:` it will be a key-value pair.
-          if (_exp.type !== 'ref' || _exp.namespace !== undefined) {
-            args.push(_exp);
+          if (exp.type !== 'ref' || exp.namespace !== undefined) {
+            args.push(exp);
           } else {
             this.getLineWS();
 
@@ -2325,7 +2410,7 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
               if (typeof val === 'string' || Array.isArray(val) || val.type === 'num' || val.type === 'ext') {
                 args.push({
                   type: 'kv',
-                  name: _exp.name,
+                  name: exp.name,
                   val: val
                 });
               } else {
@@ -2333,7 +2418,7 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
                 throw this.error('Expected string in quotes, number or external argument');
               }
             } else {
-              args.push(_exp);
+              args.push(exp);
             }
           }
 
@@ -2349,9 +2434,10 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
         }
 
         return args;
-      };
-
-      EntriesParser.prototype.getNumber = function getNumber() {
+      }
+    }, {
+      key: 'getNumber',
+      value: function getNumber() {
         var num = '';
         var cc = this._source.charCodeAt(this._index);
 
@@ -2393,9 +2479,10 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
           type: 'num',
           val: num
         };
-      };
-
-      EntriesParser.prototype.getMemberExpression = function getMemberExpression() {
+      }
+    }, {
+      key: 'getMemberExpression',
+      value: function getMemberExpression() {
         var exp = this.getLiteral();
 
         // the obj element of the member expression
@@ -2410,20 +2497,21 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
         }
 
         return exp;
-      };
-
-      EntriesParser.prototype.getMembers = function getMembers() {
+      }
+    }, {
+      key: 'getMembers',
+      value: function getMembers() {
         var members = [];
         var index = 0;
         var defaultIndex = void 0;
 
         while (this._index < this._length) {
-          var _ch2 = this._source[this._index];
+          var ch = this._source[this._index];
 
-          if ((_ch2 !== '[' || this._source[this._index + 1] === '[') && _ch2 !== '*') {
+          if ((ch !== '[' || this._source[this._index + 1] === '[') && ch !== '*') {
             break;
           }
-          if (_ch2 === '*') {
+          if (ch === '*') {
             this._index++;
             defaultIndex = index;
           }
@@ -2446,12 +2534,13 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
         }
 
         return [members, defaultIndex];
-      };
+      }
 
       // MemberKey may be a Keyword or Number
 
-
-      EntriesParser.prototype.getMemberKey = function getMemberKey() {
+    }, {
+      key: 'getMemberKey',
+      value: function getMemberKey() {
         this._index++;
 
         var cc = this._source.charCodeAt(this._index);
@@ -2469,9 +2558,10 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
 
         this._index++;
         return literal;
-      };
-
-      EntriesParser.prototype.getLiteral = function getLiteral() {
+      }
+    }, {
+      key: 'getLiteral',
+      value: function getLiteral() {
         var cc = this._source.charCodeAt(this._index);
         if (cc >= 48 && cc <= 57 || cc === 45) {
           return this.getNumber();
@@ -2491,13 +2581,14 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
           type: 'ref',
           name: this.getIdentifier()
         };
-      };
+      }
 
       // At runtime, we don't care about comments so we just have
       // to parse them properly and skip their content.
 
-
-      EntriesParser.prototype.getComment = function getComment() {
+    }, {
+      key: 'getComment',
+      value: function getComment() {
         var eol = this._source.indexOf('\n', this._index);
 
         while (eol !== -1 && this._source[eol + 1] === '#') {
@@ -2515,9 +2606,10 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
         } else {
           this._index = eol + 1;
         }
-      };
-
-      EntriesParser.prototype.error = function error(message) {
+      }
+    }, {
+      key: 'error',
+      value: function error(message) {
         var start = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : null;
 
         var pos = this._index;
@@ -2539,9 +2631,10 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
         err.description = message;
         err.context = context;
         return err;
-      };
-
-      EntriesParser.prototype.getJunkEntry = function getJunkEntry() {
+      }
+    }, {
+      key: 'getJunkEntry',
+      value: function getJunkEntry() {
         var pos = this._index;
 
         var nextEntity = this._findNextEntryStart(pos);
@@ -2557,9 +2650,10 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
         if (entityStart < this._lastGoodEntryEnd) {
           entityStart = this._lastGoodEntryEnd;
         }
-      };
-
-      EntriesParser.prototype._findEntityStart = function _findEntityStart(pos) {
+      }
+    }, {
+      key: '_findEntityStart',
+      value: function _findEntityStart(pos) {
         var start = pos;
 
         while (true) {
@@ -2568,11 +2662,11 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
             start = 0;
             break;
           }
-          var _cc = this._source.charCodeAt(start + 1);
+          var cc = this._source.charCodeAt(start + 1);
 
-          if (_cc >= 97 && _cc <= 122 || // a-z
-          _cc >= 65 && _cc <= 90 || // A-Z
-          _cc === 95) {
+          if (cc >= 97 && cc <= 122 || // a-z
+          cc >= 65 && cc <= 90 || // A-Z
+          cc === 95) {
             // _
             start++;
             break;
@@ -2580,18 +2674,19 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
         }
 
         return start;
-      };
-
-      EntriesParser.prototype._findNextEntryStart = function _findNextEntryStart(pos) {
+      }
+    }, {
+      key: '_findNextEntryStart',
+      value: function _findNextEntryStart(pos) {
         var start = pos;
 
         while (true) {
           if (start === 0 || this._source[start - 1] === '\n') {
-            var _cc2 = this._source.charCodeAt(start);
+            var cc = this._source.charCodeAt(start);
 
-            if (_cc2 >= 97 && _cc2 <= 122 || // a-z
-            _cc2 >= 65 && _cc2 <= 90 || // A-Z
-            _cc2 === 95 || _cc2 === 35 || _cc2 === 91) {
+            if (cc >= 97 && cc <= 122 || // a-z
+            cc >= 65 && cc <= 90 || // A-Z
+            cc === 95 || cc === 35 || cc === 91) {
               // _#[
               break;
             }
@@ -2606,52 +2701,55 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
         }
 
         return start;
-      };
-
-      return EntriesParser;
-    }();
-
-    var FTLRuntimeParser = {
-      parseResource: function parseResource(string) {
-        var parser = new EntriesParser();
-        return parser.getResource(string);
       }
-    };
+    }]);
+
+    return EntriesParser;
+  }();
+
+  var FTLRuntimeParser = {
+    parseResource: function parseResource(string) {
+      var parser = new EntriesParser();
+      return parser.getResource(string);
+    }
+  };
+
+  /**
+   * The `FTLType` class is the base of FTL's type system.
+   *
+   * FTL types wrap JavaScript values and store additional configuration for
+   * them, which can then be used in the `toString` method together with a proper
+   * `Intl` formatter.
+   */
+
+  var FTLType = function () {
 
     /**
-     * The `FTLType` class is the base of FTL's type system.
+     * Create an `FTLType` instance.
      *
-     * FTL types wrap JavaScript values and store additional configuration for
-     * them, which can then be used in the `toString` method together with a proper
-     * `Intl` formatter.
+     * @param   {Any}    value - JavaScript value to wrap.
+     * @param   {Object} opts  - Configuration.
+     * @returns {FTLType}
+     */
+    function FTLType(value, opts) {
+      _classCallCheck(this, FTLType);
+
+      this.value = value;
+      this.opts = opts;
+    }
+
+    /**
+     * Get the JavaScript value wrapped by this `FTLType` instance.
+     *
+     * @returns {Any}
      */
 
-    var FTLType = function () {
 
-      /**
-       * Create an `FTLType` instance.
-       *
-       * @param   {Any}    value - JavaScript value to wrap.
-       * @param   {Object} opts  - Configuration.
-       * @returns {FTLType}
-       */
-      function FTLType(value, opts) {
-        _classCallCheck(this, FTLType);
-
-        this.value = value;
-        this.opts = opts;
-      }
-
-      /**
-       * Get the JavaScript value wrapped by this `FTLType` instance.
-       *
-       * @returns {Any}
-       */
-
-
-      FTLType.prototype.valueOf = function valueOf() {
+    _createClass(FTLType, [{
+      key: 'valueOf',
+      value: function valueOf() {
         return this.value;
-      };
+      }
 
       /**
        * Stringify an instance of `FTLType`.
@@ -2663,82 +2761,96 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
        * @returns {string}
        */
 
-
-      FTLType.prototype.toString = function toString(ctx) {
+    }, {
+      key: 'toString',
+      value: function toString(ctx) {
         return this.value.toString(ctx);
-      };
-
-      return FTLType;
-    }();
-
-    var FTLNone = function (_FTLType) {
-      _inherits(FTLNone, _FTLType);
-
-      function FTLNone() {
-        _classCallCheck(this, FTLNone);
-
-        return _possibleConstructorReturn(this, _FTLType.apply(this, arguments));
       }
+    }]);
 
-      FTLNone.prototype.toString = function toString() {
+    return FTLType;
+  }();
+
+  var FTLNone = function (_FTLType) {
+    _inherits(FTLNone, _FTLType);
+
+    function FTLNone() {
+      _classCallCheck(this, FTLNone);
+
+      return _possibleConstructorReturn(this, (FTLNone.__proto__ || Object.getPrototypeOf(FTLNone)).apply(this, arguments));
+    }
+
+    _createClass(FTLNone, [{
+      key: 'toString',
+      value: function toString() {
         return this.value || '???';
-      };
-
-      return FTLNone;
-    }(FTLType);
-
-    var FTLNumber = function (_FTLType2) {
-      _inherits(FTLNumber, _FTLType2);
-
-      function FTLNumber(value, opts) {
-        _classCallCheck(this, FTLNumber);
-
-        return _possibleConstructorReturn(this, _FTLType2.call(this, parseFloat(value), opts));
       }
+    }]);
 
-      FTLNumber.prototype.toString = function toString(ctx) {
+    return FTLNone;
+  }(FTLType);
+
+  var FTLNumber = function (_FTLType2) {
+    _inherits(FTLNumber, _FTLType2);
+
+    function FTLNumber(value, opts) {
+      _classCallCheck(this, FTLNumber);
+
+      return _possibleConstructorReturn(this, (FTLNumber.__proto__ || Object.getPrototypeOf(FTLNumber)).call(this, parseFloat(value), opts));
+    }
+
+    _createClass(FTLNumber, [{
+      key: 'toString',
+      value: function toString(ctx) {
         var nf = ctx._memoizeIntlObject(Intl.NumberFormat, this.opts);
         return nf.format(this.value);
-      };
-
-      return FTLNumber;
-    }(FTLType);
-
-    var FTLDateTime = function (_FTLType3) {
-      _inherits(FTLDateTime, _FTLType3);
-
-      function FTLDateTime(value, opts) {
-        _classCallCheck(this, FTLDateTime);
-
-        return _possibleConstructorReturn(this, _FTLType3.call(this, new Date(value), opts));
       }
+    }]);
 
-      FTLDateTime.prototype.toString = function toString(ctx) {
+    return FTLNumber;
+  }(FTLType);
+
+  var FTLDateTime = function (_FTLType3) {
+    _inherits(FTLDateTime, _FTLType3);
+
+    function FTLDateTime(value, opts) {
+      _classCallCheck(this, FTLDateTime);
+
+      return _possibleConstructorReturn(this, (FTLDateTime.__proto__ || Object.getPrototypeOf(FTLDateTime)).call(this, new Date(value), opts));
+    }
+
+    _createClass(FTLDateTime, [{
+      key: 'toString',
+      value: function toString(ctx) {
         var dtf = ctx._memoizeIntlObject(Intl.DateTimeFormat, this.opts);
         return dtf.format(this.value);
-      };
-
-      return FTLDateTime;
-    }(FTLType);
-
-    var FTLKeyword = function (_FTLType4) {
-      _inherits(FTLKeyword, _FTLType4);
-
-      function FTLKeyword() {
-        _classCallCheck(this, FTLKeyword);
-
-        return _possibleConstructorReturn(this, _FTLType4.apply(this, arguments));
       }
+    }]);
 
-      FTLKeyword.prototype.toString = function toString() {
+    return FTLDateTime;
+  }(FTLType);
+
+  var FTLKeyword = function (_FTLType4) {
+    _inherits(FTLKeyword, _FTLType4);
+
+    function FTLKeyword() {
+      _classCallCheck(this, FTLKeyword);
+
+      return _possibleConstructorReturn(this, (FTLKeyword.__proto__ || Object.getPrototypeOf(FTLKeyword)).apply(this, arguments));
+    }
+
+    _createClass(FTLKeyword, [{
+      key: 'toString',
+      value: function toString() {
         var _value = this.value,
             name = _value.name,
             namespace = _value.namespace;
 
         return namespace ? namespace + ':' + name : name;
-      };
-
-      FTLKeyword.prototype.match = function match(ctx, other) {
+      }
+    }, {
+      key: 'match',
+      value: function match(ctx, other) {
         var _value2 = this.value,
             name = _value2.name,
             namespace = _value2.namespace;
@@ -2754,141 +2866,179 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
           return name === pr.select(other.valueOf());
         }
         return false;
-      };
-
-      return FTLKeyword;
-    }(FTLType);
-
-    var FTLList = function (_Array) {
-      _inherits(FTLList, _Array);
-
-      function FTLList() {
-        _classCallCheck(this, FTLList);
-
-        return _possibleConstructorReturn(this, _Array.apply(this, arguments));
       }
+    }]);
 
-      FTLList.prototype.toString = function toString(ctx) {
+    return FTLKeyword;
+  }(FTLType);
+
+  var FTLList = function (_Array) {
+    _inherits(FTLList, _Array);
+
+    function FTLList() {
+      _classCallCheck(this, FTLList);
+
+      return _possibleConstructorReturn(this, (FTLList.__proto__ || Object.getPrototypeOf(FTLList)).apply(this, arguments));
+    }
+
+    _createClass(FTLList, [{
+      key: 'toString',
+      value: function toString(ctx) {
         var lf = ctx._memoizeIntlObject(Intl.ListFormat // XXX add this.opts
         );
         var elems = this.map(function (elem) {
           return elem.toString(ctx);
         });
         return lf.format(elems);
-      };
+      }
+    }]);
 
-      return FTLList;
-    }(Array);
+    return FTLList;
+  }(Array);
+
+  /**
+   * @module
+   *
+   * The FTL resolver ships with a number of functions built-in.
+   *
+   * Each function take two arguments:
+   *   - args - an array of positional args
+   *   - opts - an object of key-value args
+   *
+   * Arguments to functions are guaranteed to already be instances of `FTLType`.
+   * Functions must return `FTLType` objects as well.  For this reason it may be
+   * necessary to unwrap the JavaScript value behind the FTL Value and to merge
+   * the configuration of the argument with the configuration of the return
+   * value.
+   */
+
+
+  var builtins = {
+    'NUMBER': function NUMBER(_ref, opts) {
+      var _ref2 = _slicedToArray(_ref, 1),
+          arg = _ref2[0];
+
+      return new FTLNumber(arg.valueOf(), merge(arg.opts, opts));
+    },
+    'DATETIME': function DATETIME(_ref3, opts) {
+      var _ref4 = _slicedToArray(_ref3, 1),
+          arg = _ref4[0];
+
+      return new FTLDateTime(arg.valueOf(), merge(arg.opts, opts));
+    },
+    'LIST': function LIST(args) {
+      return FTLList.from(args);
+    },
+    'LEN': function LEN(_ref5) {
+      var _ref6 = _slicedToArray(_ref5, 1),
+          arg = _ref6[0];
+
+      return new FTLNumber(arg.valueOf().length);
+    },
+    'TAKE': function TAKE(_ref7) {
+      var _ref8 = _slicedToArray(_ref7, 2),
+          num = _ref8[0],
+          arg = _ref8[1];
+
+      return FTLList.from(arg.valueOf().slice(0, num.value));
+    },
+    'DROP': function DROP(_ref9) {
+      var _ref10 = _slicedToArray(_ref9, 2),
+          num = _ref10[0],
+          arg = _ref10[1];
+
+      return FTLList.from(arg.valueOf().slice(num.value));
+    }
+  };
+
+  var MAX_PLACEABLE_LENGTH = 2500;
+
+  // Unicode bidi isolation characters.
+  var FSI = '\u2068';
+  var PDI = '\u2069';
+  var MessageContext = function () {
 
     /**
-     * @module
+     * Create an instance of `MessageContext`.
      *
-     * The FTL resolver ships with a number of functions built-in.
+     * The `lang` argument is used to instantiate `Intl` formatters used by
+     * translations.  The `options` object can be used to configure the context.
      *
-     * Each function take two arguments:
-     *   - args - an array of positional args
-     *   - opts - an object of key-value args
+     * Examples:
      *
-     * Arguments to functions are guaranteed to already be instances of `FTLType`.
-     * Functions must return `FTLType` objects as well.  For this reason it may be
-     * necessary to unwrap the JavaScript value behind the FTL Value and to merge
-     * the configuration of the argument with the configuration of the return
-     * value.
+     *     const ctx = new MessageContext(lang);
+     *
+     *     const ctx = new MessageContext(lang, { useIsolating: false });
+     *
+     *     const ctx = new MessageContext(lang, {
+     *       useIsolating: true,
+     *       functions: {
+     *         NODE_ENV: () => process.env.NODE_ENV
+     *       }
+     *     });
+     *
+     * Available options:
+     *
+     *   - `functions` - an object of additional functions available to
+     *                   translations as builtins.
+     *
+     *   - `useIsolating` - boolean specifying whether to use Unicode isolation
+     *                    marks (FSI, PDI) for bidi interpolations.
+     *
+     * @param   {string} lang      - Language of the context.
+     * @param   {Object} [options]
+     * @returns {MessageContext}
+     */
+    function MessageContext(lang) {
+      var _ref17 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {},
+          _ref17$functions = _ref17.functions,
+          functions = _ref17$functions === undefined ? {} : _ref17$functions,
+          _ref17$useIsolating = _ref17.useIsolating,
+          useIsolating = _ref17$useIsolating === undefined ? true : _ref17$useIsolating;
+
+      _classCallCheck(this, MessageContext);
+
+      this.lang = lang;
+      this.functions = functions;
+      this.useIsolating = useIsolating;
+      this.messages = new Map();
+      this.intls = new WeakMap();
+    }
+
+    /**
+     * Add a translation resource to the context.
+     *
+     * The translation resource must use the FTL syntax.  It will be parsed by
+     * the context and each translation unit (entity) will be available in the
+     * `messages` map by its identifier.
+     *
+     *     ctx.addMessages('foo = Foo');
+     *     ctx.messages.get('foo');
+     *
+     *     // Returns a raw representation of the 'foo' entity.
+     *
+     * Parsed entities should be formatted with the `format` method in case they
+     * contain logic (references, select expressions etc.).
+     *
+     * @param   {string} source - Text resource with translations.
+     * @returns {Array<Error>}
      */
 
 
-    var builtins = {
-      'NUMBER': function NUMBER(_ref, opts) {
-        var arg = _ref[0];
-        return new FTLNumber(arg.valueOf(), merge(arg.opts, opts));
-      },
-      'PLURAL': function PLURAL(_ref2, opts) {
-        var arg = _ref2[0];
-        return new FTLNumber(arg.valueOf(), merge(arg.opts, opts));
-      },
-      'DATETIME': function DATETIME(_ref3, opts) {
-        var arg = _ref3[0];
-        return new FTLDateTime(arg.valueOf(), merge(arg.opts, opts));
-      },
-      'LIST': function LIST(args) {
-        return FTLList.from(args);
-      },
-      'LEN': function LEN(_ref4) {
-        var arg = _ref4[0];
-        return new FTLNumber(arg.valueOf().length);
-      },
-      'TAKE': function TAKE(_ref5) {
-        var num = _ref5[0],
-            arg = _ref5[1];
-        return FTLList.from(arg.valueOf().slice(0, num.value));
-      },
-      'DROP': function DROP(_ref6) {
-        var num = _ref6[0],
-            arg = _ref6[1];
-        return FTLList.from(arg.valueOf().slice(num.value));
-      }
-    };
-
-    var MAX_PLACEABLE_LENGTH = 2500;
-    var MessageContext = function () {
-
-      /**
-       * Create an instance of `MessageContext`.
-       *
-       * The `lang` argument is used to instantiate `Intl` formatters used by
-       * translations.  The `options` object can be used to configure the context.
-       *
-       * Available options:
-       *
-       *   - functions - an object of additional functions available to
-       *                 translations as builtins.
-       *
-       * @param   {string} lang      - Language of the context.
-       * @param   {Object} [options]
-       * @returns {MessageContext}
-       */
-      function MessageContext(lang) {
-        var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
-
-        _classCallCheck(this, MessageContext);
-
-        this.lang = lang;
-        this.functions = options.functions || {};
-        this.messages = new Map();
-        this.intls = new WeakMap();
-      }
-
-      /**
-       * Add a translation resource to the context.
-       *
-       * The translation resource must use the FTL syntax.  It will be parsed by
-       * the context and each translation unit (entity) will be available in the
-       * `messages` map by its identifier.
-       *
-       *     ctx.addMessages('foo = Foo');
-       *     ctx.messages.get('foo');
-       *
-       *     // Returns a raw representation of the 'foo' entity.
-       *
-       * Parsed entities should be formatted with the `format` method in case they
-       * contain logic (references, select expressions etc.).
-       *
-       * @param   {string} source - Text resource with translations.
-       * @returns {Array<Error>}
-       */
-
-
-      MessageContext.prototype.addMessages = function addMessages(source) {
+    _createClass(MessageContext, [{
+      key: 'addMessages',
+      value: function addMessages(source) {
         var _FTLRuntimeParser$par = FTLRuntimeParser.parseResource(source),
-            entries = _FTLRuntimeParser$par[0],
-            errors = _FTLRuntimeParser$par[1];
+            _FTLRuntimeParser$par2 = _slicedToArray(_FTLRuntimeParser$par, 2),
+            entries = _FTLRuntimeParser$par2[0],
+            errors = _FTLRuntimeParser$par2[1];
 
         for (var id in entries) {
           this.messages.set(id, entries[id]);
         }
 
         return errors;
-      };
+      }
 
       /**
        * Format an entity to a string or null.
@@ -2921,8 +3071,9 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
        * @returns {?string}
        */
 
-
-      MessageContext.prototype.format = function format(entity, args, errors) {
+    }, {
+      key: 'format',
+      value: function format(entity, args, errors) {
         // optimize entities which are simple strings with no traits
         if (typeof entity === 'string') {
           return entity;
@@ -2940,9 +3091,10 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
 
         var result = resolve(this, args, entity, errors);
         return result instanceof FTLNone ? null : result;
-      };
-
-      MessageContext.prototype._memoizeIntlObject = function _memoizeIntlObject(ctor, opts) {
+      }
+    }, {
+      key: '_memoizeIntlObject',
+      value: function _memoizeIntlObject(ctor, opts) {
         var cache = this.intls.get(ctor) || {};
         var id = JSON.stringify(opts);
 
@@ -2952,135 +3104,312 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
         }
 
         return cache[id];
+      }
+    }]);
+
+    return MessageContext;
+  }();
+
+  Intl.MessageContext = MessageContext;
+  Intl.MessageNumberArgument = FTLNumber;
+  Intl.MessageDateTimeArgument = FTLDateTime;
+
+  if (!Intl.NumberFormat) {
+    Intl.NumberFormat = function () {
+      return {
+        format: function format(n) {
+          return n;
+        }
       };
+    };
+  }
 
-      return MessageContext;
-    }();
-
-    Intl.MessageContext = MessageContext;
-    Intl.MessageNumberArgument = FTLNumber;
-    Intl.MessageDateTimeArgument = FTLDateTime;
-
-    if (!Intl.NumberFormat) {
-      Intl.NumberFormat = function () {
-        return {
-          format: function format(n) {
-            return n;
-          }
-        };
+  if (!Intl.PluralRules) {
+    Intl.PluralRules = function (code) {
+      var fn = getPluralRule(code);
+      return {
+        select: function select(n) {
+          return fn(n);
+        }
       };
-    }
+    };
+  }
 
-    if (!Intl.PluralRules) {
-      Intl.PluralRules = function (code) {
-        var fn = getPluralRule(code);
-        return {
-          select: function select(n) {
-            return fn(n);
-          }
-        };
+  if (!Intl.ListFormat) {
+    Intl.ListFormat = function () {
+      return {
+        format: function format(list) {
+          return list.join(', ');
+        }
       };
-    }
+    };
+  }
 
-    if (!Intl.ListFormat) {
-      Intl.ListFormat = function () {
-        return {
-          format: function format(list) {
-            return list.join(', ');
-          }
-        };
-      };
-    }
+  /* eslint-disable */
 
-    var properties = new WeakMap();
-    var contexts = new WeakMap();
+  var unicodeLocaleExtensionSequence = "-u(-[a-z0-9]{2,8})+";
+  var unicodeLocaleExtensionSequenceRE = new RegExp(unicodeLocaleExtensionSequence);
+  var unicodeLocaleExtensionSequenceGlobalRE = new RegExp(unicodeLocaleExtensionSequence, "g");
+  var langTagMappings = {};
+  var langSubtagMappings = {};
+  var extlangMappings = {};
+
+  /**
+   * Regular expression defining BCP 47 language tags.
+   *
+   * Spec: RFC 5646 section 2.1.
+   */
+  var languageTagRE = function () {
+    // RFC 5234 section B.1
+    // ALPHA          =  %x41-5A / %x61-7A   ; A-Z / a-z
+    var ALPHA = "[a-zA-Z]";
+    // DIGIT          =  %x30-39
+    //                        ; 0-9
+    var DIGIT = "[0-9]";
+
+    // RFC 5646 section 2.1
+    // alphanum      = (ALPHA / DIGIT)     ; letters and numbers
+    var alphanum = "(?:" + ALPHA + "|" + DIGIT + ")";
+    // regular       = "art-lojban"        ; these tags match the 'langtag'
+    //               / "cel-gaulish"       ; production, but their subtags
+    //               / "no-bok"            ; are not extended language
+    //               / "no-nyn"            ; or variant subtags: their meaning
+    //               / "zh-guoyu"          ; is defined by their registration
+    //               / "zh-hakka"          ; and all of these are deprecated
+    //               / "zh-min"            ; in favor of a more modern
+    //               / "zh-min-nan"        ; subtag or sequence of subtags
+    //               / "zh-xiang"
+    var regular = "(?:art-lojban|cel-gaulish|no-bok|no-nyn|zh-guoyu|zh-hakka|zh-min|zh-min-nan|zh-xiang)";
+    // irregular     = "en-GB-oed"         ; irregular tags do not match
+    //                / "i-ami"             ; the 'langtag' production and
+    //                / "i-bnn"             ; would not otherwise be
+    //                / "i-default"         ; considered 'well-formed'
+    //                / "i-enochian"        ; These tags are all valid,
+    //                / "i-hak"             ; but most are deprecated
+    //                / "i-klingon"         ; in favor of more modern
+    //                / "i-lux"             ; subtags or subtag
+    //                / "i-mingo"           ; combination
+    //                / "i-navajo"
+    //                / "i-pwn"
+    //                / "i-tao"
+    //                / "i-tay"
+    //                / "i-tsu"
+    //                / "sgn-BE-FR"
+    //                / "sgn-BE-NL"
+    //                / "sgn-CH-DE"
+    var irregular = "(?:en-GB-oed|i-ami|i-bnn|i-default|i-enochian|i-hak|i-klingon|i-lux|i-mingo|i-navajo|i-pwn|i-tao|i-tay|i-tsu|sgn-BE-FR|sgn-BE-NL|sgn-CH-DE)";
+    // grandfathered = irregular           ; non-redundant tags registered
+    //               / regular             ; during the RFC 3066 era
+    var grandfathered = "(?:" + irregular + "|" + regular + ")";
+    // privateuse    = "x" 1*("-" (1*8alphanum))
+    var privateuse = "(?:x(?:-[a-z0-9]{1,8})+)";
+    // singleton     = DIGIT               ; 0 - 9
+    //               / %x41-57             ; A - W
+    //               / %x59-5A             ; Y - Z
+    //               / %x61-77             ; a - w
+    //               / %x79-7A             ; y - z
+    var singleton = "(?:" + DIGIT + "|[A-WY-Za-wy-z])";
+    // extension     = singleton 1*("-" (2*8alphanum))
+    var extension = "(?:" + singleton + "(?:-" + alphanum + "{2,8})+)";
+    // variant       = 5*8alphanum         ; registered variants
+    //               / (DIGIT 3alphanum)
+    var variant = "(?:" + alphanum + "{5,8}|(?:" + DIGIT + alphanum + "{3}))";
+    // region        = 2ALPHA              ; ISO 3166-1 code
+    //               / 3DIGIT              ; UN M.49 code
+    var region = "(?:" + ALPHA + "{2}|" + DIGIT + "{3})";
+    // script        = 4ALPHA              ; ISO 15924 code
+    var script = "(?:" + ALPHA + "{4})";
+    // extlang       = 3ALPHA              ; selected ISO 639 codes
+    //                 *2("-" 3ALPHA)      ; permanently reserved
+    var extlang = "(?:" + ALPHA + "{3}(?:-" + ALPHA + "{3}){0,2})";
+    // language      = 2*3ALPHA            ; shortest ISO 639 code
+    //                 ["-" extlang]       ; sometimes followed by
+    //                                     ; extended language subtags
+    //               / 4ALPHA              ; or reserved for future use
+    //               / 5*8ALPHA            ; or registered language subtag
+    var language = "(?:" + ALPHA + "{2,3}(?:-" + extlang + ")?|" + ALPHA + "{4}|" + ALPHA + "{5,8})";
+    // langtag       = language
+    //                 ["-" script]
+    //                 ["-" region]
+    //                 *("-" variant)
+    //                 *("-" extension)
+    //                 ["-" privateuse]
+    var langtag = language + "(?:-" + script + ")?(?:-" + region + ")?(?:-" + variant + ")*(?:-" + extension + ")*(?:-" + privateuse + ")?";
+    // Language-Tag  = langtag             ; normal language tags
+    //               / privateuse          ; private use tag
+    //               / grandfathered       ; grandfathered tags
+    var languageTag = "^(?:" + langtag + "|" + privateuse + "|" + grandfathered + ")$";
+
+    // Language tags are case insensitive (RFC 5646 section 2.1.1).
+    return new RegExp(languageTag, "i");
+  }();
+
+  var duplicateVariantRE = function () {
+    // RFC 5234 section B.1
+    // ALPHA          =  %x41-5A / %x61-7A   ; A-Z / a-z
+    var ALPHA = "[a-zA-Z]";
+    // DIGIT          =  %x30-39
+    //                        ; 0-9
+    var DIGIT = "[0-9]";
+
+    // RFC 5646 section 2.1
+    // alphanum      = (ALPHA / DIGIT)     ; letters and numbers
+    var alphanum = "(?:" + ALPHA + "|" + DIGIT + ")";
+    // variant       = 5*8alphanum         ; registered variants
+    //               / (DIGIT 3alphanum)
+    var variant = "(?:" + alphanum + "{5,8}|(?:" + DIGIT + alphanum + "{3}))";
+
+    // Match a langtag that contains a duplicate variant.
+    var duplicateVariant =
+    // Match everything in a langtag prior to any variants, and maybe some
+    // of the variants as well (which makes this pattern inefficient but
+    // not wrong, for our purposes);
+    "(?:" + alphanum + "{2,8}-)+" +
+    // a variant, parenthesised so that we can refer back to it later;
+    "(" + variant + ")-" +
+    // zero or more subtags at least two characters long (thus stopping
+    // before extension and privateuse components);
+    "(?:" + alphanum + "{2,8}-)*" +
+    // and the same variant again
+    "\\1" +
+    // ...but not followed by any characters that would turn it into a
+    // different subtag.
+    "(?!" + alphanum + ")";
+
+    // Language tags are case insensitive (RFC 5646 section 2.1.1), but for
+    // this regular expression that's covered by having its character classes
+    // list both upper- and lower-case characters.
+    return new RegExp(duplicateVariant);
+  }();
+
+  var duplicateSingletonRE = function () {
+    // RFC 5234 section B.1
+    // ALPHA          =  %x41-5A / %x61-7A   ; A-Z / a-z
+    var ALPHA = "[a-zA-Z]";
+    // DIGIT          =  %x30-39
+    //                        ; 0-9
+    var DIGIT = "[0-9]";
+
+    // RFC 5646 section 2.1
+    // alphanum      = (ALPHA / DIGIT)     ; letters and numbers
+    var alphanum = "(?:" + ALPHA + "|" + DIGIT + ")";
+    // singleton     = DIGIT               ; 0 - 9
+    //               / %x41-57             ; A - W
+    //               / %x59-5A             ; Y - Z
+    //               / %x61-77             ; a - w
+    //               / %x79-7A             ; y - z
+    var singleton = "(?:" + DIGIT + "|[A-WY-Za-wy-z])";
+
+    // Match a langtag that contains a duplicate singleton.
+    var duplicateSingleton =
+    // Match a singleton subtag, parenthesised so that we can refer back to
+    // it later;
+    "-(" + singleton + ")-" +
+    // then zero or more subtags;
+    "(?:" + alphanum + "+-)*" +
+    // and the same singleton again
+    "\\1" +
+    // ...but not followed by any characters that would turn it into a
+    // different subtag.
+    "(?!" + alphanum + ")";
+
+    // Language tags are case insensitive (RFC 5646 section 2.1.1), but for
+    // this regular expression that's covered by having its character classes
+    // list both upper- and lower-case characters.
+    return new RegExp(duplicateSingleton);
+  }();
+
+  var properties = new WeakMap();
+  var contexts = new WeakMap();
+
+  /**
+   * The `Localization` class is responsible for fetching resources and
+   * formatting translations.
+   *
+   * It implements the fallback strategy in case of errors encountered during the
+   * formatting of translations.
+   *
+   * In HTML and XUL, l20n.js will create an instance of `Localization` for the
+   * default set of `<link rel="localization">` elements.  You can get
+   * a reference to it via:
+   *
+   *     const localization = document.l10n.get('main');
+   *
+   * Different names can be specified via the `name` attribute on the `<link>`
+   * elements.  One `document` can have more than one `Localization` instance,
+   * but one `Localization` instance can only be assigned to a single `document`.
+   */
+
+  var Localization = function () {
 
     /**
-     * The `Localization` class is responsible for fetching resources and
-     * formatting translations.
+     * Create an instance of the `Localization` class.
      *
-     * It implements the fallback strategy in case of errors encountered during the
-     * formatting of translations.
+     * The instance's configuration is provided by two runtime-dependent
+     * functions passed to the constructor.
      *
-     * In HTML and XUL, l20n.js will create an instance of `Localization` for the
-     * default set of `<link rel="localization">` elements.  You can get
-     * a reference to it via:
+     * The `requestBundles` function takes an array of language codes and returns
+     * a Promise of an array of lazy `ResourceBundle` instances.  The
+     * `Localization` instance will imediately call the `fetch` method of the
+     * first bundle returned by `requestBundles` and may call `fetch` on
+     * subsequent bundles in fallback scenarios.
      *
-     *     const localization = document.l10n.get('main');
+     * The array of bundles is the de-facto current fallback chain of languages
+     * and fetch locations.
      *
-     * Different names can be specified via the `name` attribute on the `<link>`
-     * elements.  One `document` can have more than one `Localization` instance,
-     * but one `Localization` instance can only be assigned to a single `document`.
+     * The `createContext` function takes a language code and returns an instance
+     * of `Intl.MessageContext`.  Since it's also provided to the constructor by
+     * the runtime it may pass runtime-specific `functions` to the
+     * `MessageContext` instances it creates.
+     *
+     * @param   {Function}     requestBundles
+     * @param   {Function}     createContext
+     * @returns {Localization}
+     */
+    function Localization(requestBundles, createContext) {
+      _classCallCheck(this, Localization);
+
+      var createHeadContext = function createHeadContext(bundles) {
+        return createHeadContextWith(createContext, bundles);
+      };
+
+      // Keep `requestBundles` and `createHeadContext` private.
+      properties.set(this, {
+        requestBundles: requestBundles, createHeadContext: createHeadContext
+      });
+
+      /**
+       * A Promise which resolves when the `Localization` instance has fetched
+       * and parsed all localization resources in the user's first preferred
+       * language (if available).
+       *
+       *     localization.interactive.then(callback);
+       */
+      this.interactive = requestBundles().then(
+      // Create a `MessageContext` for the first bundle right away.
+      function (bundles) {
+        return createHeadContext(bundles).then(
+        // Force `this.interactive` to resolve to the list of bundles.
+        function () {
+          return bundles;
+        });
+      });
+    }
+
+    /**
+     * Initiate the change of the currently negotiated languages.
+     *
+     * `requestLanguages` takes an array of language codes representing user's
+     * updated language preferences.
+     *
+     * @param   {Array<string>}     requestedLangs
+     * @returns {Promise<Array<ResourceBundle>>}
      */
 
-    var Localization = function () {
 
-      /**
-       * Create an instance of the `Localization` class.
-       *
-       * The instance's configuration is provided by two runtime-dependent
-       * functions passed to the constructor.
-       *
-       * The `requestBundles` function takes an array of language codes and returns
-       * a Promise of an array of lazy `ResourceBundle` instances.  The
-       * `Localization` instance will imediately call the `fetch` method of the
-       * first bundle returned by `requestBundles` and may call `fetch` on
-       * subsequent bundles in fallback scenarios.
-       *
-       * The array of bundles is the de-facto current fallback chain of languages
-       * and fetch locations.
-       *
-       * The `createContext` function takes a language code and returns an instance
-       * of `Intl.MessageContext`.  Since it's also provided to the constructor by
-       * the runtime it may pass runtime-specific `functions` to the
-       * `MessageContext` instances it creates.
-       *
-       * @param   {Function}     requestBundles
-       * @param   {Function}     createContext
-       * @returns {Localization}
-       */
-      function Localization(requestBundles, createContext) {
-        _classCallCheck(this, Localization);
-
-        var createHeadContext = function createHeadContext(bundles) {
-          return createHeadContextWith(createContext, bundles);
-        };
-
-        // Keep `requestBundles` and `createHeadContext` private.
-        properties.set(this, {
-          requestBundles: requestBundles, createHeadContext: createHeadContext
-        });
-
-        /**
-         * A Promise which resolves when the `Localization` instance has fetched
-         * and parsed all localization resources in the user's first preferred
-         * language (if available).
-         *
-         *     localization.interactive.then(callback);
-         */
-        this.interactive = requestBundles().then(
-        // Create a `MessageContext` for the first bundle right away.
-        function (bundles) {
-          return createHeadContext(bundles).then(
-          // Force `this.interactive` to resolve to the list of bundles.
-          function () {
-            return bundles;
-          });
-        });
-      }
-
-      /**
-       * Initiate the change of the currently negotiated languages.
-       *
-       * `requestLanguages` takes an array of language codes representing user's
-       * updated language preferences.
-       *
-       * @param   {Array<string>}     requestedLangs
-       * @returns {Promise<Array<ResourceBundle>>}
-       */
-
-
-      Localization.prototype.requestLanguages = function requestLanguages(requestedLangs) {
+    _createClass(Localization, [{
+      key: 'requestLanguages',
+      value: function requestLanguages(requestedLangs) {
         var _properties$get = properties.get(this),
             requestBundles = _properties$get.requestBundles,
             createHeadContext = _properties$get.createHeadContext;
@@ -3092,8 +3421,9 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
         return this.interactive = Promise.all(
         // Get the current bundles to be able to compare them to the new result
         // of the language negotiation.
-        [this.interactive, requestBundles(requestedLangs)]).then(function (_ref19) {
-          var oldBundles = _ref19[0],
+        [this.interactive, requestBundles(requestedLangs)]).then(function (_ref18) {
+          var _ref19 = _slicedToArray(_ref18, 2),
+              oldBundles = _ref19[0],
               newBundles = _ref19[1];
 
           if (equal(oldBundles, newBundles)) {
@@ -3104,7 +3434,7 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
             return newBundles;
           });
         });
-      };
+      }
 
       /**
        * Format translations and handle fallback if needed.
@@ -3122,8 +3452,9 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
        * @private
        */
 
-
-      Localization.prototype.formatWithFallback = function formatWithFallback(bundles, ctx, keys, method, prev) {
+    }, {
+      key: 'formatWithFallback',
+      value: function formatWithFallback(bundles, ctx, keys, method, prev) {
         var _this7 = this;
 
         // If a context for the head bundle doesn't exist we've reached the last
@@ -3134,7 +3465,7 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
           return prev.translations;
         }
 
-        var current = method(ctx, keys, prev);
+        var current = keysFromContext(method, this.sanitizeArgs, ctx, keys, prev);
 
         // In Gecko `console` needs to imported explicitly.
         if (typeof console !== 'undefined') {
@@ -3168,7 +3499,7 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
         return createHeadContext(tailBundles).then(function (next) {
           return _this7.formatWithFallback(tailBundles, next, keys, method, current);
         });
-      };
+      }
 
       /**
        * Format translations into {value, attrs} objects.
@@ -3195,14 +3526,15 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
        * @private
        */
 
-
-      Localization.prototype.formatEntities = function formatEntities(keys) {
+    }, {
+      key: 'formatEntities',
+      value: function formatEntities(keys) {
         var _this8 = this;
 
         return this.interactive.then(function (bundles) {
-          return _this8.formatWithFallback(bundles, contexts.get(bundles[0]), keys, entitiesFromContext);
+          return _this8.formatWithFallback(bundles, contexts.get(bundles[0]), keys, _this8.entityFromContext);
         });
-      };
+      }
 
       /**
        * Retrieve translations corresponding to the passed keys.
@@ -3224,8 +3556,9 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
        * @returns {Promise<Array<string>>}
        */
 
-
-      Localization.prototype.formatValues = function formatValues() {
+    }, {
+      key: 'formatValues',
+      value: function formatValues() {
         var _this9 = this;
 
         for (var _len = arguments.length, keys = Array(_len), _key = 0; _key < _len; _key++) {
@@ -3237,9 +3570,9 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
           return Array.isArray(key) ? key : [key, null];
         });
         return this.interactive.then(function (bundles) {
-          return _this9.formatWithFallback(bundles, contexts.get(bundles[0]), keyTuples, valuesFromContext);
+          return _this9.formatWithFallback(bundles, contexts.get(bundles[0]), keyTuples, _this9.valueFromContext);
         });
-      };
+      }
 
       /**
        * Retrieve the translation corresponding to the `id` identifier.
@@ -3264,190 +3597,224 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
        * @returns {Promise<string>}
        */
 
-
-      Localization.prototype.formatValue = function formatValue(id, args) {
+    }, {
+      key: 'formatValue',
+      value: function formatValue(id, args) {
         return this.formatValues([id, args]).then(function (_ref20) {
-          var val = _ref20[0];
+          var _ref21 = _slicedToArray(_ref20, 1),
+              val = _ref21[0];
+
           return val;
         });
-      };
-
-      return Localization;
-    }();
-
-    var reHtml = /[&<>]/g;
-    var htmlEntities = {
-      '&': '&amp;',
-      '<': '&lt;',
-      '>': '&gt;'
-    };var reOverlay = /<|&#?\w+;/;
-
-    // XXX The allowed list should be amendable; https://bugzil.la/922573.
-    var ALLOWED_ELEMENTS = {
-      'http://www.w3.org/1999/xhtml': ['a', 'em', 'strong', 'small', 's', 'cite', 'q', 'dfn', 'abbr', 'data', 'time', 'code', 'var', 'samp', 'kbd', 'sub', 'sup', 'i', 'b', 'u', 'mark', 'ruby', 'rt', 'rp', 'bdi', 'bdo', 'span', 'br', 'wbr']
-    };
-
-    var ALLOWED_ATTRIBUTES = {
-      'http://www.w3.org/1999/xhtml': {
-        global: ['title', 'aria-label', 'aria-valuetext', 'aria-moz-hint'],
-        a: ['download'],
-        area: ['download', 'alt'],
-        // value is special-cased in isAttrAllowed
-        input: ['alt', 'placeholder'],
-        menuitem: ['label'],
-        menu: ['label'],
-        optgroup: ['label'],
-        option: ['label'],
-        track: ['label'],
-        img: ['alt'],
-        textarea: ['placeholder'],
-        th: ['abbr']
-      },
-      'http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul': {
-        global: ['accesskey', 'aria-label', 'aria-valuetext', 'aria-moz-hint', 'label'],
-        key: ['key', 'keycode'],
-        textbox: ['placeholder'],
-        toolbarbutton: ['tooltiptext']
-      }
-    };
-
-    var DOM_NAMESPACES = {
-      'html': 'http://www.w3.org/1999/xhtml',
-      'xul': 'http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul',
-
-      // Reverse map for overlays.
-      'http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul': 'xul',
-      'http://www.w3.org/1999/xhtml': 'html'
-    };
-
-    var observerConfig = {
-      attributes: true,
-      characterData: false,
-      childList: true,
-      subtree: true,
-      attributeFilter: ['data-l10n-id', 'data-l10n-args', 'data-l10n-bundle']
-    };
-
-    /**
-     * The `LocalizationObserver` class is responsible for localizing DOM trees.
-     * It also implements the iterable protocol which allows iterating over and
-     * retrieving available `Localization` objects.
-     *
-     * Each `document` will have its corresponding `LocalizationObserver` instance
-     * created automatically on startup, as `document.l10n`.
-     */
-
-    var LocalizationObserver = function () {
-      /**
-       * @returns {LocalizationObserver}
-       */
-      function LocalizationObserver() {
-        var _this10 = this;
-
-        _classCallCheck(this, LocalizationObserver);
-
-        this.localizations = new Map();
-        this.roots = new WeakMap();
-        this.observer = new MutationObserver(function (mutations) {
-          return _this10.translateMutations(mutations);
-        });
       }
 
       /**
-       * Test if the `Localization` object with a given name already exists.
+       * Sanitize external arguments.
        *
-       * ```javascript
-       * if (document.l10n.has('extra')) {
-       *   const extraLocalization = document.l10n.get('extra');
-       * }
-       * ```
-       * @param   {string} name - key for the object
-       * @returns {boolean}
+       * Subclasses of `Localization` can override this method to provide
+       * environment-specific sanitization of arguments passed into translations.
+       *
+       * @param   {Object} args
+       * @returns {Object}
+       * @private
        */
 
-
-      LocalizationObserver.prototype.has = function has(name) {
-        return this.localizations.has(name);
-      };
+    }, {
+      key: 'sanitizeArgs',
+      value: function sanitizeArgs(args) {
+        return args;
+      }
 
       /**
-       * Retrieve a reference to the `Localization` object by name.
+       * Format all public values of a message into a { value, attrs } object.
        *
-       * ```javascript
-       * const mainLocalization = document.l10n.get('main');
-       * const extraLocalization = document.l10n.get('extra');
-       * ```
+       * This function is passed as a method to `keysFromContext` and resolve
+       * a single L10n Entity using provided `MessageContext`.
        *
-       * @param   {string}        name - key for the object
-       * @returns {Localization}
+       * The function will return an object with a value and attributes of the
+       * entity.
+       *
+       * If the function fails to retrieve the entity, the value is set to the ID of
+       * an entity, and attrs to `null`. If formatting fails, it will return
+       * a partially resolved value and attributes.
+       *
+       * In both cases, an error is being added to the errors array.
+       *
+       * Subclasses of `Localization` can override this method to provide
+       * environment-specific formatting behavior.
+       *
+       * @param   {MessageContext} ctx
+       * @param   {Array<Error>}   errors
+       * @param   {String}         id
+       * @param   {Object}         args
+       * @returns {Object}
+       * @private
        */
 
+    }, {
+      key: 'entityFromContext',
+      value: function entityFromContext(ctx, errors, id, args) {
+        var entity = ctx.messages.get(id);
 
-      LocalizationObserver.prototype.get = function get(name) {
-        return this.localizations.get(name);
-      };
+        if (entity === undefined) {
+          errors.push(new L10nError('Unknown entity: ' + id));
+          return { value: id, attrs: null };
+        }
 
-      /**
-       * Sets a reference to the `Localization` object by name.
-       *
-       * ```javascript
-       * const loc = new Localization();
-       * document.l10n.set('extra', loc);
-       * ```
-       *
-       * @param   {string}       name - key for the object
-       * @param   {Localization} value - `Localization` object
-       * @returns {LocalizationObserver}
-       */
+        var formatted = {
+          value: ctx.format(entity, args, errors),
+          attrs: null
+        };
 
-
-      LocalizationObserver.prototype.set = function set(name, value) {
-        this.localizations.set(name, value);
-        return this;
-      };
-
-      LocalizationObserver.prototype[Symbol.iterator] = regeneratorRuntime.mark(function _callee() {
-        return regeneratorRuntime.wrap(function _callee$(_context) {
-          while (1) {
-            switch (_context.prev = _context.next) {
-              case 0:
-                return _context.delegateYield(this.localizations, 't0', 1);
-
-              case 1:
-              case 'end':
-                return _context.stop();
+        if (entity.traits) {
+          formatted.attrs = [];
+          for (var i = 0, trait; trait = entity.traits[i]; i++) {
+            if (!trait.key.hasOwnProperty('ns')) {
+              continue;
+            }
+            var attr = ctx.format(trait, args, errors);
+            if (attr !== null) {
+              formatted.attrs.push([trait.key.ns, trait.key.name, attr]);
             }
           }
-        }, _callee, this);
-      });
+        }
 
-      LocalizationObserver.prototype.handleEvent = function handleEvent() {
+        return formatted;
+      }
+
+      /**
+       * Format the value of a message into a string.
+       *
+       * This function is passed as a method to `keysFromContext` and resolve
+       * a value of a single L10n Entity using provided `MessageContext`.
+       *
+       * If the function fails to retrieve the entity, it will return an ID of it.
+       * If formatting fails, it will return a partially resolved entity.
+       *
+       * In both cases, an error is being added to the errors array.
+       *
+       * Subclasses of `Localization` can override this method to provide
+       * environment-specific formatting behavior.
+       *
+       * @param   {MessageContext} ctx
+       * @param   {Array<Error>}   errors
+       * @param   {string}         id
+       * @param   {Object}         args
+       * @returns {string}
+       * @private
+       */
+
+    }, {
+      key: 'valueFromContext',
+      value: function valueFromContext(ctx, errors, id, args) {
+        var entity = ctx.messages.get(id);
+
+        if (entity === undefined) {
+          errors.push(new L10nError('Unknown entity: ' + id));
+          return id;
+        }
+
+        return ctx.format(entity, args, errors);
+      }
+    }]);
+
+    return Localization;
+  }();
+
+  var reOverlay = /<|&#?\w+;/;
+
+  // XXX The allowed list should be amendable; https://bugzil.la/922573.
+  var ALLOWED_ELEMENTS = {
+    'http://www.w3.org/1999/xhtml': ['a', 'em', 'strong', 'small', 's', 'cite', 'q', 'dfn', 'abbr', 'data', 'time', 'code', 'var', 'samp', 'kbd', 'sub', 'sup', 'i', 'b', 'u', 'mark', 'ruby', 'rt', 'rp', 'bdi', 'bdo', 'span', 'br', 'wbr']
+  };
+
+  var ALLOWED_ATTRIBUTES = {
+    'http://www.w3.org/1999/xhtml': {
+      global: ['title', 'aria-label', 'aria-valuetext', 'aria-moz-hint'],
+      a: ['download'],
+      area: ['download', 'alt'],
+      // value is special-cased in isAttrAllowed
+      input: ['alt', 'placeholder'],
+      menuitem: ['label'],
+      menu: ['label'],
+      optgroup: ['label'],
+      option: ['label'],
+      track: ['label'],
+      img: ['alt'],
+      textarea: ['placeholder'],
+      th: ['abbr']
+    },
+    'http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul': {
+      global: ['accesskey', 'aria-label', 'aria-valuetext', 'aria-moz-hint', 'label'],
+      key: ['key', 'keycode'],
+      textbox: ['placeholder'],
+      toolbarbutton: ['tooltiptext']
+    }
+  };
+
+  var DOM_NAMESPACES = {
+    'html': 'http://www.w3.org/1999/xhtml',
+    'xul': 'http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul'
+  };var reHtml = /[&<>]/g;
+  var htmlEntities = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;'
+  };
+
+  /**
+   * The `DOMLocalization` class localizes DOM trees.
+   */
+
+  var DOMLocalization = function (_Localization) {
+    _inherits(DOMLocalization, _Localization);
+
+    /**
+     * @param   {Function}             requestBundles
+     * @param   {Function}             createContext
+     * @param   {string}               name
+     * @param   {DocumentLocalization} [observer]
+     * @returns {DOMLocalization}
+     */
+    function DOMLocalization(requestBundles, createContext, name, observer) {
+      _classCallCheck(this, DOMLocalization);
+
+      var _this10 = _possibleConstructorReturn(this, (DOMLocalization.__proto__ || Object.getPrototypeOf(DOMLocalization)).call(this, requestBundles, createContext));
+
+      _this10.name = name;
+      _this10.query = '[data-l10n-with=' + name + ']';
+      _this10.roots = new Set();
+      _this10.observer = observer;
+      return _this10;
+    }
+
+    _createClass(DOMLocalization, [{
+      key: 'handleEvent',
+      value: function handleEvent() {
         return this.requestLanguages();
-      };
+      }
 
       /**
        * Trigger the language negotation process with an array of language codes.
        * Returns a promise with the negotiated array of language objects as above.
        *
        * ```javascript
-       * document.l10n.requestLanguages(['de-DE', 'de', 'en-US']);
+       * localization.requestLanguages(['de-DE', 'de', 'en-US']);
        * ```
        *
        * @param   {Array<string>} requestedLangs - array of requested languages
        * @returns {Promise<Array<string>>}
        */
 
-
-      LocalizationObserver.prototype.requestLanguages = function requestLanguages(requestedLangs) {
+    }, {
+      key: 'requestLanguages',
+      value: function requestLanguages(requestedLangs) {
         var _this11 = this;
 
-        var localizations = Array.from(this.localizations.values());
-        return Promise.all(localizations.map(function (l10n) {
-          return l10n.requestLanguages(requestedLangs);
-        })).then(function () {
-          return _this11.translateAllRoots();
+        _get(DOMLocalization.prototype.__proto__ || Object.getPrototypeOf(DOMLocalization.prototype), 'requestLanguages', this).call(this, requestedLangs).then(function () {
+          return _this11.translateRoots();
         });
-      };
+      }
 
       /**
        * Set the `data-l10n-id` and `data-l10n-args` attributes on DOM elements.
@@ -3462,7 +3829,7 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
        * preferences.
        *
        * ```javascript
-       * document.l10n.setAttributes(
+       * localization.setAttributes(
        *   document.querySelector('#welcome'), 'hello', { who: 'world' }
        * );
        * ```
@@ -3483,20 +3850,21 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
        * ```
        */
 
-
-      LocalizationObserver.prototype.setAttributes = function setAttributes(element, id, args) {
+    }, {
+      key: 'setAttributes',
+      value: function setAttributes(element, id, args) {
         element.setAttribute('data-l10n-id', id);
         if (args) {
           element.setAttribute('data-l10n-args', JSON.stringify(args));
         }
         return element;
-      };
+      }
 
       /**
        * Get the `data-l10n-*` attributes from DOM elements.
        *
        * ```javascript
-       * document.l10n.getAttributes(
+       * localization.getAttributes(
        *   document.querySelector('#welcome')
        * );
        * // -> { id: 'hello', args: { who: 'world' } }
@@ -3506,188 +3874,114 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
        * @returns {{id: string, args: Object}}
        */
 
-
-      LocalizationObserver.prototype.getAttributes = function getAttributes(element) {
+    }, {
+      key: 'getAttributes',
+      value: function getAttributes(element) {
         return {
           id: element.getAttribute('data-l10n-id'),
           args: JSON.parse(element.getAttribute('data-l10n-args'))
         };
-      };
+      }
 
       /**
-       * Add a new root to the list of observed ones.
+       * Add `root` to the list of roots managed by this `DOMLocalization`.
+       *
+       * Additionally, if this `DOMLocalization` has an observer, start observing
+       * `root` in order to translate mutations in it.
        *
        * @param {Element}      root - Root to observe.
-       * @param {Localization} l10n - `Localization` object
        */
 
+    }, {
+      key: 'connectRoot',
+      value: function connectRoot(root) {
+        this.roots.add(root);
 
-      LocalizationObserver.prototype.observeRoot = function observeRoot(root) {
-        var l10n = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : this.get('main');
-
-        if (!this.roots.has(l10n)) {
-          this.roots.set(l10n, new Set());
+        if (this.observer) {
+          this.observer.observeRoot(root);
         }
-        this.roots.get(l10n).add(root);
-        this.observer.observe(root, observerConfig);
-      };
+      }
 
       /**
-       * Remove a root from the list of observed ones.
-       * If the root is the last to be associated with a given `Localization` object
-       * the `Localization` object association will also be removed.
+       * Remove `root` from the list of roots managed by this `DOMLocalization`.
        *
-       * Returns `true` if the root was the last one associated with at least
-       * one `Localization` object.
+       * Additionally, if this `DOMLocalization` has an observer, stop observing
+       * `root`.
+       *
+       * Returns `true` if the root was the last one managed by this
+       * `DOMLocalization`.
        *
        * @param   {Element} root - Root to disconnect.
        * @returns {boolean}
        */
 
+    }, {
+      key: 'disconnectRoot',
+      value: function disconnectRoot(root) {
+        this.roots.delete(root);
 
-      LocalizationObserver.prototype.disconnectRoot = function disconnectRoot(root) {
-        var wasLast = false;
-
-        this.pause();
-        for (var _iterator7 = this.localizations, _isArray7 = Array.isArray(_iterator7), _i7 = 0, _iterator7 = _isArray7 ? _iterator7 : _iterator7[Symbol.iterator]();;) {
-          var _ref23;
-
-          if (_isArray7) {
-            if (_i7 >= _iterator7.length) break;
-            _ref23 = _iterator7[_i7++];
-          } else {
-            _i7 = _iterator7.next();
-            if (_i7.done) break;
-            _ref23 = _i7.value;
-          }
-
-          var _ref24 = _ref23,
-              name = _ref24[0],
-              l10n = _ref24[1];
-
-          var roots = this.roots.get(l10n);
-          if (roots && roots.has(root)) {
-            roots.delete(root);
-            if (roots.size === 0) {
-              wasLast = true;
-              this.localizations.delete(name);
-              this.roots.delete(l10n);
-            }
-          }
+        if (this.observer) {
+          this.observer.unobserveRoot(root);
         }
-        this.resume();
 
-        return wasLast;
-      };
-
-      /**
-       * Pauses the `MutationObserver`
-       */
-
-
-      LocalizationObserver.prototype.pause = function pause() {
-        this.observer.disconnect();
-      };
+        return this.roots.size === 0;
+      }
 
       /**
-       * Resumes the `MutationObserver`
-       */
-
-
-      LocalizationObserver.prototype.resume = function resume() {
-        for (var _iterator8 = this.localizations.values(), _isArray8 = Array.isArray(_iterator8), _i8 = 0, _iterator8 = _isArray8 ? _iterator8 : _iterator8[Symbol.iterator]();;) {
-          var _ref25;
-
-          if (_isArray8) {
-            if (_i8 >= _iterator8.length) break;
-            _ref25 = _iterator8[_i8++];
-          } else {
-            _i8 = _iterator8.next();
-            if (_i8.done) break;
-            _ref25 = _i8.value;
-          }
-
-          var l10n = _ref25;
-
-          if (this.roots.has(l10n)) {
-            for (var _iterator9 = this.roots.get(l10n), _isArray9 = Array.isArray(_iterator9), _i9 = 0, _iterator9 = _isArray9 ? _iterator9 : _iterator9[Symbol.iterator]();;) {
-              var _ref26;
-
-              if (_isArray9) {
-                if (_i9 >= _iterator9.length) break;
-                _ref26 = _iterator9[_i9++];
-              } else {
-                _i9 = _iterator9.next();
-                if (_i9.done) break;
-                _ref26 = _i9.value;
-              }
-
-              var root = _ref26;
-
-              this.observer.observe(root, observerConfig);
-            }
-          }
-        }
-      };
-
-      /**
-       * Triggers translation of all roots associated with the
-       * `LocalizationObserver`.
-       *
-       * Returns a `Promise` which is resolved once all translations are
-       * completed.
+       * Translate all roots associated with this `DOMLocalization`.
        *
        * @returns {Promise}
        */
 
-
-      LocalizationObserver.prototype.translateAllRoots = function translateAllRoots() {
+    }, {
+      key: 'translateRoots',
+      value: function translateRoots() {
         var _this12 = this;
 
-        var localizations = Array.from(this.localizations.values());
-        return Promise.all(localizations.map(function (l10n) {
-          return _this12.translateRoots(l10n);
+        var roots = Array.from(this.roots);
+        return Promise.all(roots.map(function (root) {
+          return _this12.translateRoot(root);
         }));
-      };
+      }
 
-      LocalizationObserver.prototype.translateRoots = function translateRoots(l10n) {
+      /**
+       * Translate `root`.
+       *
+       * This is similar to `translateFragment` but it will also set the `lang` and
+       * `dir` attribute on `root`.  In XUL documents, the anonymous content
+       * attached to `root` will also be translated.
+       *
+       * @returns {Promise}
+       */
+
+    }, {
+      key: 'translateRoot',
+      value: function translateRoot(root) {
         var _this13 = this;
 
-        if (!this.roots.has(l10n)) {
-          return Promise.resolve();
-        }
-
-        var roots = Array.from(this.roots.get(l10n));
-        return Promise.all(roots.map(function (root) {
-          return _this13.translateRoot(root, l10n);
-        }));
-      };
-
-      LocalizationObserver.prototype.translateRoot = function translateRoot(root, l10n) {
-        function setLangs() {
-          return l10n.interactive.then(function (bundles) {
-            var langs = bundles.map(function (bundle) {
-              return bundle.lang;
-            });
-            var wasLocalizedBefore = root.hasAttribute('langs');
-
-            root.setAttribute('langs', langs.join(' '));
-            root.setAttribute('lang', langs[0]);
-            root.setAttribute('dir', getDirection(langs[0]));
-
-            if (wasLocalizedBefore) {
-              root.dispatchEvent(new CustomEvent('DOMRetranslated', {
-                bubbles: false,
-                cancelable: false
-              }));
-            }
+        return this.translateRootContent(root).then(function () {
+          return _this13.interactive;
+        }).then(function (bundles) {
+          var langs = bundles.map(function (bundle) {
+            return bundle.lang;
           });
-        }
+          var wasLocalizedBefore = root.hasAttribute('langs');
 
-        return this.translateRootContent(root).then(setLangs);
-      };
+          root.setAttribute('langs', langs.join(' '));
+          root.setAttribute('lang', langs[0]);
+          root.setAttribute('dir', getDirection(langs[0]));
 
-      LocalizationObserver.prototype.translateRootContent = function translateRootContent(root) {
+          if (wasLocalizedBefore) {
+            root.dispatchEvent(new CustomEvent('DOMRetranslated', {
+              bubbles: false,
+              cancelable: false
+            }));
+          }
+        });
+      }
+    }, {
+      key: 'translateRootContent',
+      value: function translateRootContent(root) {
         var _this14 = this;
 
         var anonChildren = document.getAnonymousNodes ? document.getAnonymousNodes(root) : null;
@@ -3695,65 +3989,19 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
           return this.translateFragment(root);
         }
 
-        return Promise.all([root].concat(anonChildren).map(function (node) {
+        return Promise.all([root].concat(_toConsumableArray(anonChildren)).map(function (node) {
           return _this14.translateFragment(node);
         }));
-      };
-
-      LocalizationObserver.prototype.translateMutations = function translateMutations(mutations) {
-        for (var _iterator10 = mutations, _isArray10 = Array.isArray(_iterator10), _i10 = 0, _iterator10 = _isArray10 ? _iterator10 : _iterator10[Symbol.iterator]();;) {
-          var _ref27;
-
-          if (_isArray10) {
-            if (_i10 >= _iterator10.length) break;
-            _ref27 = _iterator10[_i10++];
-          } else {
-            _i10 = _iterator10.next();
-            if (_i10.done) break;
-            _ref27 = _i10.value;
-          }
-
-          var mutation = _ref27;
-
-          switch (mutation.type) {
-            case 'attributes':
-              this.translateElement(mutation.target);
-              break;
-            case 'childList':
-              for (var _iterator11 = mutation.addedNodes, _isArray11 = Array.isArray(_iterator11), _i11 = 0, _iterator11 = _isArray11 ? _iterator11 : _iterator11[Symbol.iterator]();;) {
-                var _ref28;
-
-                if (_isArray11) {
-                  if (_i11 >= _iterator11.length) break;
-                  _ref28 = _iterator11[_i11++];
-                } else {
-                  _i11 = _iterator11.next();
-                  if (_i11.done) break;
-                  _ref28 = _i11.value;
-                }
-
-                var addedNode = _ref28;
-
-                if (addedNode.nodeType === addedNode.ELEMENT_NODE) {
-                  if (addedNode.childElementCount) {
-                    this.translateFragment(addedNode);
-                  } else if (addedNode.hasAttribute('data-l10n-id')) {
-                    this.translateElement(addedNode);
-                  }
-                }
-              }
-              break;
-          }
-        }
-      };
+      }
 
       /**
-       * Translate a DOM node or fragment asynchronously.
+       * Translate a DOM element or fragment asynchronously.
        *
-       * You can manually trigger translation (or re-translation) of a DOM fragment
-       * with `translateFragment`.  Use the `data-l10n-id` and `data-l10n-args`
-       * attributes to mark up the DOM with information about which translations to
-       * use.
+       * Manually trigger the translation (or re-translation) of a DOM fragment.
+       * Use the `data-l10n-id` and `data-l10n-args` attributes to mark up the DOM
+       * with information about which translations to use.  Only elements with
+       * `data-l10n-with` attribute matching this `DOMLocalization`'s name will be
+       * translated.
        *
        * Returns a `Promise` that gets resolved once the translation is complete.
        *
@@ -3761,30 +4009,30 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
        * @returns {Promise}
        */
 
-
-      LocalizationObserver.prototype.translateFragment = function translateFragment(frag) {
+    }, {
+      key: 'translateFragment',
+      value: function translateFragment(frag) {
+        return this.translateElements(this.getTranslatables(frag));
+      }
+    }, {
+      key: 'translateElements',
+      value: function translateElements(elements) {
         var _this15 = this;
 
-        return Promise.all(this.groupTranslatablesByLocalization(frag).map(function (elemsWithL10n) {
-          return _this15.translateElements(elemsWithL10n[0], elemsWithL10n[1]);
-        }));
-      };
-
-      LocalizationObserver.prototype.translateElements = function translateElements(l10n, elements) {
-        var _this16 = this;
-
         if (!elements.length) {
-          return [];
+          return Promise.resolve([]);
         }
 
         var keys = elements.map(this.getKeysForElement);
-        return l10n.formatEntities(keys).then(function (translations) {
-          return _this16.applyTranslations(elements, translations);
+        return this.formatEntities(keys).then(function (translations) {
+          return _this15.applyTranslations(elements, translations);
         });
-      };
+      }
 
       /**
-       * Translates a single DOM node asynchronously.
+       * Translate a single DOM element asynchronously.
+       *
+       * The element's `data-l10n-with` must match this `DOMLocalization`'s name.
        *
        * Returns a `Promise` that gets resolved once the translation is complete.
        *
@@ -3792,123 +4040,459 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
        * @returns {Promise}
        */
 
+    }, {
+      key: 'translateElement',
+      value: function translateElement(element) {
+        var _this16 = this;
 
-      LocalizationObserver.prototype.translateElement = function translateElement(element) {
-        var _this17 = this;
-
-        var l10n = this.get(element.getAttribute('data-l10n-bundle') || 'main');
-        return l10n.formatEntities([this.getKeysForElement(element)]).then(function (translations) {
-          return _this17.applyTranslations([element], translations);
+        return this.formatEntities([this.getKeysForElement(element)]).then(function (translations) {
+          return _this16.applyTranslations([element], translations);
         });
-      };
+      }
+    }, {
+      key: 'applyTranslations',
+      value: function applyTranslations(elements, translations) {
+        if (this.observer) {
+          this.observer.pauseObserving();
+        }
 
-      LocalizationObserver.prototype.applyTranslations = function applyTranslations(elements, translations) {
-        this.pause();
         for (var i = 0; i < elements.length; i++) {
           overlayElement(elements[i], translations[i]);
         }
-        this.resume();
-      };
 
-      LocalizationObserver.prototype.groupTranslatablesByLocalization = function groupTranslatablesByLocalization(frag) {
-        var elemsWithL10n = [];
-        for (var _iterator12 = this.localizations, _isArray12 = Array.isArray(_iterator12), _i12 = 0, _iterator12 = _isArray12 ? _iterator12 : _iterator12[Symbol.iterator]();;) {
-          var _ref29;
-
-          if (_isArray12) {
-            if (_i12 >= _iterator12.length) break;
-            _ref29 = _iterator12[_i12++];
-          } else {
-            _i12 = _iterator12.next();
-            if (_i12.done) break;
-            _ref29 = _i12.value;
-          }
-
-          var loc = _ref29;
-
-          elemsWithL10n.push([loc[1], this.getTranslatables(frag, loc[0])]);
+        if (this.observer) {
+          this.observer.resumeObserving();
         }
-        return elemsWithL10n;
-      };
-
-      LocalizationObserver.prototype.getTranslatables = function getTranslatables(element, bundleName) {
-        var query = bundleName === 'main' ? '[data-l10n-bundle="main"], [data-l10n-id]:not([data-l10n-bundle])' : '[data-l10n-bundle=' + bundleName + ']';
-        var nodes = Array.from(element.querySelectorAll(query));
+      }
+    }, {
+      key: 'getTranslatables',
+      value: function getTranslatables(element) {
+        var nodes = Array.from(element.querySelectorAll(this.query));
 
         if (typeof element.hasAttribute === 'function' && element.hasAttribute('data-l10n-id')) {
-          var elemBundleName = element.getAttribute('data-l10n-bundle');
-          if (elemBundleName === null || elemBundleName === bundleName) {
+          var elemBundleName = element.getAttribute('data-l10n-with');
+          if (elemBundleName === this.name) {
             nodes.push(element);
           }
         }
 
         return nodes;
-      };
-
-      LocalizationObserver.prototype.getKeysForElement = function getKeysForElement(element) {
+      }
+    }, {
+      key: 'getKeysForElement',
+      value: function getKeysForElement(element) {
         return [element.getAttribute('data-l10n-id'),
         // In XUL documents missing attributes return `''` here which breaks
         // JSON.parse.  HTML documents return `null`.
         JSON.parse(element.getAttribute('data-l10n-args') || null)];
-      };
-
-      return LocalizationObserver;
-    }();
-
-    var HTTP_STATUS_CODE_OK = 200;
-
-    var ResourceBundle = function () {
-      function ResourceBundle(lang, resIds) {
-        _classCallCheck(this, ResourceBundle);
-
-        this.lang = lang;
-        this.loaded = false;
-        this.resIds = resIds;
       }
 
-      ResourceBundle.prototype.fetch = function fetch() {
+      /**
+       * Sanitize arguments.
+       *
+       * Escape HTML tags and entities in string-typed arguments.
+       *
+       * @param   {Object} args
+       * @returns {Object}
+       * @private
+       */
+
+    }, {
+      key: 'sanitizeArgs',
+      value: function sanitizeArgs(args) {
+        for (var name in args) {
+          var arg = args[name];
+          if (typeof arg === 'string') {
+            args[name] = arg.replace(reHtml, function (match) {
+              return htmlEntities[match];
+            });
+          }
+        }
+        return args;
+      }
+    }]);
+
+    return DOMLocalization;
+  }(Localization);
+
+  /**
+   * The `DocumentLocalization` class localizes DOM documents.
+   *
+   * A sublcass of `DOMLocalization`, it implements methods for observing DOM
+   * trees with a `MutationObserver`.  It can delegate the translation of DOM
+   * elements marked with `data-l10n-with` to other named `DOMLocalizations`.
+   *
+   * Each `document` will have its corresponding `DocumentLocalization` instance
+   * created automatically on startup, as `document.l10n`.
+   */
+
+
+  var DocumentLocalization = function (_DOMLocalization) {
+    _inherits(DocumentLocalization, _DOMLocalization);
+
+    /**
+     * @returns {DocumentLocalization}
+     */
+    function DocumentLocalization(requestBundles, createContext) {
+      _classCallCheck(this, DocumentLocalization);
+
+      // Localize elements with no explicit `data-l10n-with` too.
+      var _this17 = _possibleConstructorReturn(this, (DocumentLocalization.__proto__ || Object.getPrototypeOf(DocumentLocalization)).call(this, requestBundles, createContext, 'main'));
+      // There can be only one `DocumentLocalization` per document and it's
+      // always called 'main'.
+
+
+      _this17.query = '[data-l10n-with="main"], [data-l10n-id]:not([data-l10n-with])';
+
+      // A map of named delegate `DOMLocalization` objects.
+      _this17.delegates = new Map();
+
+      // Used by `DOMLocalization` when connecting/disconnecting roots and for
+      // pausing the `MutationObserver` when translations are applied to the DOM.
+      // `DocumentLocalization` is its own observer because it implements
+      // `observeRoot`, `unobserveRoot`, `pauseObserving` and `resumeObserving`.
+      _this17.observer = _this17;
+
+      // A Set of DOM trees observed by the `MutationObserver`.
+      _this17.observedRoots = new Set();
+      _this17.mutationObserver = new MutationObserver(function (mutations) {
+        return _this17.translateMutations(mutations);
+      });
+
+      _this17.observerConfig = {
+        attributes: true,
+        characterData: false,
+        childList: true,
+        subtree: true,
+        attributeFilter: ['data-l10n-id', 'data-l10n-args', 'data-l10n-with']
+      };
+      return _this17;
+    }
+
+    /**
+     * Trigger the language negotation process for this `DocumentLocalization`
+     * and any `DOMLocalization` objects which it can delegate to.
+     *
+     * Returns a promise which resolves to an array of arrays of negotiated
+     * languages for each `Localization` available in the current document.
+     *
+     * ```javascript
+     * document.l10n.requestLanguages(['de-DE', 'de', 'en-US']);
+     * ```
+     *
+     * @param   {Array<string>} requestedLangs - array of requested languages
+     * @returns {Promise<Array<Array<string>>>}
+     */
+
+
+    _createClass(DocumentLocalization, [{
+      key: 'requestLanguages',
+      value: function requestLanguages(requestedLangs) {
         var _this18 = this;
+
+        var requests = [_get(DocumentLocalization.prototype.__proto__ || Object.getPrototypeOf(DocumentLocalization.prototype), 'requestLanguages', this).call(this, requestedLangs)].concat(Array.from(this.delegates.values(), function (delegate) {
+          return delegate.requestLanguages(requestedLangs);
+        }));
+
+        return Promise.all(requests).then(function () {
+          return _this18.translateDocument();
+        });
+      }
+
+      /**
+       * Starting observing `root` with the `MutationObserver`.
+       *
+       * @private
+       */
+
+    }, {
+      key: 'observeRoot',
+      value: function observeRoot(root) {
+        this.observedRoots.add(root);
+        this.mutationObserver.observe(root, this.observerConfig);
+      }
+
+      /**
+       * Stop observing `root` with the `MutationObserver`.
+       *
+       * @private
+       */
+
+    }, {
+      key: 'unobserveRoot',
+      value: function unobserveRoot(root) {
+        this.observedRoots.delete(root);
+        // Pause and resume the mutation observer to stop observing `root`.
+        this.pauseObserving();
+        this.resumeObserving();
+      }
+
+      /**
+       * Pauses the `MutationObserver`.
+       *
+       * @private
+       */
+
+    }, {
+      key: 'pauseObserving',
+      value: function pauseObserving() {
+        this.mutationObserver.disconnect();
+      }
+
+      /**
+       * Resumes the `MutationObserver`.
+       *
+       * @private
+       */
+
+    }, {
+      key: 'resumeObserving',
+      value: function resumeObserving() {
+        var _iteratorNormalCompletion7 = true;
+        var _didIteratorError7 = false;
+        var _iteratorError7 = undefined;
+
+        try {
+          for (var _iterator7 = this.observedRoots[Symbol.iterator](), _step7; !(_iteratorNormalCompletion7 = (_step7 = _iterator7.next()).done); _iteratorNormalCompletion7 = true) {
+            var root = _step7.value;
+
+            this.mutationObserver.observe(root, this.observerConfig);
+          }
+        } catch (err) {
+          _didIteratorError7 = true;
+          _iteratorError7 = err;
+        } finally {
+          try {
+            if (!_iteratorNormalCompletion7 && _iterator7.return) {
+              _iterator7.return();
+            }
+          } finally {
+            if (_didIteratorError7) {
+              throw _iteratorError7;
+            }
+          }
+        }
+      }
+
+      /**
+       * Translate mutations detected by the `MutationObserver`.
+       *
+       * The elements in the mutations can use `data-l10n-with` to specify which
+       * `DOMLocalization` should be used for translating them.
+       *
+       * @private
+       */
+
+    }, {
+      key: 'translateMutations',
+      value: function translateMutations(mutations) {
+        var _iteratorNormalCompletion8 = true;
+        var _didIteratorError8 = false;
+        var _iteratorError8 = undefined;
+
+        try {
+          for (var _iterator8 = mutations[Symbol.iterator](), _step8; !(_iteratorNormalCompletion8 = (_step8 = _iterator8.next()).done); _iteratorNormalCompletion8 = true) {
+            var mutation = _step8.value;
+
+            switch (mutation.type) {
+              case 'attributes':
+                this.translateElement(mutation.target);
+                break;
+              case 'childList':
+                var _iteratorNormalCompletion9 = true;
+                var _didIteratorError9 = false;
+                var _iteratorError9 = undefined;
+
+                try {
+                  for (var _iterator9 = mutation.addedNodes[Symbol.iterator](), _step9; !(_iteratorNormalCompletion9 = (_step9 = _iterator9.next()).done); _iteratorNormalCompletion9 = true) {
+                    var addedNode = _step9.value;
+
+                    if (addedNode.nodeType === addedNode.ELEMENT_NODE) {
+                      if (addedNode.childElementCount) {
+                        this.translateFragment(addedNode);
+                      } else if (addedNode.hasAttribute('data-l10n-id')) {
+                        this.translateElement(addedNode);
+                      }
+                    }
+                  }
+                } catch (err) {
+                  _didIteratorError9 = true;
+                  _iteratorError9 = err;
+                } finally {
+                  try {
+                    if (!_iteratorNormalCompletion9 && _iterator9.return) {
+                      _iterator9.return();
+                    }
+                  } finally {
+                    if (_didIteratorError9) {
+                      throw _iteratorError9;
+                    }
+                  }
+                }
+
+                break;
+            }
+          }
+        } catch (err) {
+          _didIteratorError8 = true;
+          _iteratorError8 = err;
+        } finally {
+          try {
+            if (!_iteratorNormalCompletion8 && _iterator8.return) {
+              _iterator8.return();
+            }
+          } finally {
+            if (_didIteratorError8) {
+              throw _iteratorError8;
+            }
+          }
+        }
+      }
+
+      /**
+       * Triggers translation of all roots associated with this
+       * `DocumentLocalization` and any `DOMLocalization` objects which it can
+       * delegate to.
+       *
+       * Returns a `Promise` which is resolved once all translations are
+       * completed.
+       *
+       * @returns {Promise}
+       */
+
+    }, {
+      key: 'translateDocument',
+      value: function translateDocument() {
+        var localizations = [this].concat(_toConsumableArray(this.delegates.values()));
+        return Promise.all(localizations.map(function (l10n) {
+          return l10n.translateRoots();
+        }));
+      }
+
+      /**
+       * Translate a DOM element or fragment asynchronously using this
+       * `DocumentLocalization` and any `DOMLocalization` objects which it can
+       * delegate to.
+       *
+       * Manually trigger the translation (or re-translation) of a DOM fragment.
+       * Use the `data-l10n-id` and `data-l10n-args` attributes to mark up the DOM
+       * with information about which translations to use.  Only elements with
+       * `data-l10n-with` attribute matching this `DOMLocalization`'s name will be
+       * translated.
+       *
+       * If `frag` or its descendants use `data-l10n-with`, the specific named
+       * `DOMLocalization` will be used to translate it.  As a special case,
+       * elements without `data-l10n-with` will be localized using this
+       * `DocumentLocalization` (as if they had `data-l10n-with="main"`).
+       *
+       * Returns a `Promise` that gets resolved once the translation is complete.
+       *
+       * @param   {DOMFragment} frag - Element or DocumentFragment to be translated
+       * @returns {Promise}
+       */
+
+    }, {
+      key: 'translateFragment',
+      value: function translateFragment(frag) {
+        var requests = [_get(DocumentLocalization.prototype.__proto__ || Object.getPrototypeOf(DocumentLocalization.prototype), 'translateFragment', this).call(this, frag)].concat(Array.from(this.delegates.values(), function (delegate) {
+          return delegate.translateFragment(frag);
+        }));
+
+        return Promise.all(requests);
+      }
+
+      /**
+       * Translate a single DOM element asynchronously using this
+       * `DocumentLocalization` or any `DOMLocalization` objects which it can
+       * delegate to.
+       *
+       * If `element` uses `data-l10n-with`, the specific named `DOMLocalization`
+       * will be used to translate it.  As a special case, an element without
+       * `data-l10n-with` will be localized using this `DocumentLocalization` (as
+       * if it had `data-l10n-with="main"`).
+       *
+       * Returns a `Promise` that gets resolved once the translation is complete.
+       *
+       * @param   {Element} element - HTML element to be translated
+       * @returns {Promise}
+       */
+
+    }, {
+      key: 'translateElement',
+      value: function translateElement(element) {
+        var name = element.getAttribute('data-l10n-with');
+
+        var l10n = void 0;
+        if (!name || name === 'main') {
+          l10n = this;
+        } else if (this.delegates.has(name)) {
+          l10n = this.delegates.get(name);
+        } else {
+          var err = new L10nError('Unknown Localization: ' + name + '.');
+          return Promise.reject(err);
+        }
+
+        return l10n.formatEntities([l10n.getKeysForElement(element)]).then(function (translations) {
+          return l10n.applyTranslations([element], translations);
+        });
+      }
+    }, {
+      key: 'getTranslatables',
+      value: function getTranslatables(element) {
+        var nodes = Array.from(element.querySelectorAll(this.query));
+
+        if (typeof element.hasAttribute === 'function' && element.hasAttribute('data-l10n-id')) {
+          var elemBundleName = element.getAttribute('data-l10n-with');
+          if (!elemBundleName || elemBundleName === this.name) {
+            nodes.push(element);
+          }
+        }
+
+        return nodes;
+      }
+    }]);
+
+    return DocumentLocalization;
+  }(DOMLocalization);
+
+  var HTTP_STATUS_CODE_OK = 200;
+
+  var ResourceBundle = function () {
+    function ResourceBundle(lang, resIds) {
+      _classCallCheck(this, ResourceBundle);
+
+      this.lang = lang;
+      this.loaded = false;
+      this.resIds = resIds;
+    }
+
+    _createClass(ResourceBundle, [{
+      key: 'fetch',
+      value: function fetch() {
+        var _this19 = this;
 
         if (!this.loaded) {
           this.loaded = Promise.all(this.resIds.map(function (resId) {
-            return fetchResource(resId, _this18.lang);
+            return fetchResource(resId, _this19.lang);
           }));
         }
 
         return this.loaded;
-      };
-
-      return ResourceBundle;
-    }();
-
-    document.l10n = new LocalizationObserver();
-    window.addEventListener('languagechange', document.l10n);
-
-    documentReady().then(function () {
-      var _getMeta = getMeta(document.head),
-          defaultLang = _getMeta.defaultLang,
-          availableLangs = _getMeta.availableLangs;
-
-      for (var _iterator14 = getResourceLinks(document.head), _isArray14 = Array.isArray(_iterator14), _i14 = 0, _iterator14 = _isArray14 ? _iterator14 : _iterator14[Symbol.iterator]();;) {
-        var _ref32;
-
-        if (_isArray14) {
-          if (_i14 >= _iterator14.length) break;
-          _ref32 = _iterator14[_i14++];
-        } else {
-          _i14 = _iterator14.next();
-          if (_i14.done) break;
-          _ref32 = _i14.value;
-        }
-
-        var _ref33 = _ref32,
-            name = _ref33[0],
-            resIds = _ref33[1];
-
-        if (!document.l10n.has(name)) {
-          createLocalization(name, resIds, defaultLang, availableLangs);
-        }
       }
-    });
-  })();
+    }]);
+
+    return ResourceBundle;
+  }();
+
+  var _getMeta = getMeta(document.head),
+      defaultLang = _getMeta.defaultLang,
+      availableLangs = _getMeta.availableLangs;
+
+  // Collect all l10n resource links and create `Localization` objects. The
+  // 'main' Localization must be declared as the first one.
+
+
+  getResourceLinks(document.head).forEach(function (resIds, name) {
+    return createLocalization(defaultLang, availableLangs, resIds, name);
+  });
 }
