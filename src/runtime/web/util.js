@@ -2,7 +2,7 @@
 // https://github.com/whatwg/html/issues/127
 export function documentReady() {
   const rs = document.readyState;
-  if (rs === 'interactive' || rs === 'completed') {
+  if (rs === 'interactive' || rs === 'complete') {
     return Promise.resolve();
   }
 
