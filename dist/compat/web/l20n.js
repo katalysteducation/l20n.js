@@ -1291,7 +1291,7 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
   // https://github.com/whatwg/html/issues/127
   var documentReady = function documentReady() {
     var rs = document.readyState;
-    if (rs === 'interactive' || rs === 'completed') {
+    if (rs === 'interactive' || rs === 'complete') {
       return Promise.resolve();
     }
 
