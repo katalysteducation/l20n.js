@@ -2524,7 +2524,7 @@ const ALLOWED_ELEMENTS = {
 const ALLOWED_ATTRIBUTES = {
   'http://www.w3.org/1999/xhtml': {
     global: ['title', 'aria-label', 'aria-valuetext', 'aria-moz-hint'],
-    a: ['download'],
+    a: ['href', 'download'],
     area: ['download', 'alt'],
     // value is special-cased in isAttrAllowed
     input: ['alt', 'placeholder'],
