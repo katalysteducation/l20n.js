@@ -1486,8 +1486,8 @@ function valuesOf(opts) {
 const MAX_PLACEABLE_LENGTH = 2500;
 
 // Unicode bidi isolation characters.
-const FSI = '&#8296;';
-const PDI = '&#8297;';
+// const FSI = '\u2068';
+// const PDI = '\u2069';
 
 
 /**
@@ -1814,7 +1814,8 @@ function Pattern(env, ptn) {
       }
 
       if (ctx.useIsolating && !IsURL(str)) {
-        result += `${FSI}${str}${PDI}`;
+        // result += `${FSI}${str}${PDI}`;
+        result += str;
       } else {
         result += str;
       }

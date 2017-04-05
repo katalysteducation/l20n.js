@@ -96,6 +96,11 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
   // Prevent expansion of too long placeables.
 
 
+  // Unicode bidi isolation characters.
+  // const FSI = '\u2068';
+  // const PDI = '\u2069';
+
+
   /**
    * Map an array of JavaScript values into FTL Values.
    *
@@ -550,7 +555,8 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
           }
 
           if (ctx.useIsolating && !IsURL(str)) {
-            result += '' + FSI + str + PDI;
+            // result += `${FSI}${str}${PDI}`;
+            result += str;
           } else {
             result += str;
           }
@@ -2973,10 +2979,6 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
   };
 
   var MAX_PLACEABLE_LENGTH = 2500;
-
-  // Unicode bidi isolation characters.
-  var FSI = '&#8296;';
-  var PDI = '&#8297;';
   var MessageContext = function () {
 
     /**
