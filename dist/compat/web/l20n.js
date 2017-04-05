@@ -2975,8 +2975,8 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
   var MAX_PLACEABLE_LENGTH = 2500;
 
   // Unicode bidi isolation characters.
-  var FSI = '\u2068';
-  var PDI = '\u2069';
+  var FSI = '&#8296;';
+  var PDI = '&#8297;';
   var MessageContext = function () {
 
     /**

@@ -39,8 +39,8 @@ import builtins from './builtins';
 const MAX_PLACEABLE_LENGTH = 2500;
 
 // Unicode bidi isolation characters.
-const FSI = '\u2068';
-const PDI = '\u2069';
+const FSI = '&#8296;';
+const PDI = '&#8297;';
 
 
 /**
